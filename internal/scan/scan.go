@@ -12,6 +12,7 @@ import (
 	"github.com/ossf/scorecard/v5/clients/gitlabrepo"
 	docChecks "github.com/ossf/scorecard/v5/docs/checks"
 	"github.com/ossf/scorecard/v5/pkg/scorecard"
+	"go.uber.org/zap"
 
 	"github.com/genesary/security-hub/internal/gitlabtree"
 )
@@ -138,6 +139,12 @@ func toScoreStats(result scorecard.Result) (*gitlabtree.ScoreStat, map[string]*g
 	for _, check := range result.Checks {
 		if check.Score < 0 {
 			checkScores[check.Name] = nil
+
+			zap.L().Debug("Check inconclusive",
+				zap.String("check", check.Name),
+				zap.String("reason", check.Reason),
+				zap.Error(check.Error),
+			)
 
 			continue
 		}

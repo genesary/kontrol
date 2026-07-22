@@ -12,12 +12,17 @@ RUN apk add --no-cache make git && \
 
 FROM alpine:3.24.1 AS security_provider
 
-RUN addgroup -S security-hub \
-    && adduser -S security-hub -G security-hub
+RUN addgroup -S -g 1000 security-hub \
+    && adduser -S -u 1000 -G security-hub security-hub
 
 FROM scratch
 
+# Add user / group 1000 to the image
 COPY --from=security_provider /etc/passwd /etc/passwd
+# Add default trusted certificates to the image
+COPY --from=security_provider /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Add a writable /tmp directory to the image (required by scorecard)
+COPY --from=security_provider --chown=1000:1000 --chmod=1777 /tmp /tmp
 
 USER security-hub
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
@@ -52,6 +53,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		Token:   cfg.Gitlab.Token,
 		Checks:  cfg.Scorecard.Checks,
 		Offline: cfg.Scorecard.Offline,
+	}
+
+	// Scorecard's GitLab client reads this env var directly (independent of
+	// the token passed to gitlabrepo.CreateGitlabClientWithToken) for its
+	// GraphQL-based merge request lookups and tarball download auth header.
+	err = os.Setenv("GITLAB_AUTH_TOKEN", cfg.Gitlab.Token)
+	if err != nil {
+		return fmt.Errorf("setting GITLAB_AUTH_TOKEN: %w", err)
 	}
 
 	err = scanProjects(ctx, scanOpts, projects, cfg.Scorecard.MaxConcurrency)
