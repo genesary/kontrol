@@ -99,7 +99,9 @@ output:
 security-hub scan --config config.yaml
 ```
 
-This produces a report directory (default `./report`) containing the aggregated HTML output, openable directly in a browser with no server required.
+This produces a report directory (default `./report`) containing the aggregated HTML output plus its `static/css` and `static/js` assets, openable directly in a browser with no server required. From the report, **Export CSV** downloads the full tree (every group/subgroup/project, with per-check scores) as a spreadsheet-ready CSV, and **Export PDF** opens the browser's print dialog with a PDF-friendly layout of the currently viewed page.
+
+The report's styling is built with [Tailwind CSS](https://tailwindcss.com/) from `internal/report/tailwind/input.css`. The compiled `internal/report/static/css/app.css` is committed, so a plain `go build` never needs Tailwind; only run `make frontend` if you edit the report's styles (it downloads the standalone Tailwind CLI into `./bin` on first use — no Node/npm required).
 
 Logging is structured (via [zap](https://github.com/uber-go/zap)) and written to stderr at `info` level by default. Pass `-v`/`--verbose` (works on any subcommand) to switch to `debug` level, which also surfaces per-project scan detail and otherwise-hidden diagnostic output from dependencies (e.g. Scorecard's GitLab tarball fetch attempts):
 

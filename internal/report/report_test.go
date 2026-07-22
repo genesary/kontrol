@@ -68,4 +68,14 @@ func TestRenderWritesValidReport(t *testing.T) {
 	if decoded.ProjectCount != 1 {
 		t.Fatalf("decoded.ProjectCount = %d, want 1", decoded.ProjectCount)
 	}
+
+	for _, asset := range []string{
+		filepath.Join("static", "css", "app.css"),
+		filepath.Join("static", "js", "report.js"),
+		filepath.Join("static", "js", "export.js"),
+	} {
+		if _, err := os.Stat(filepath.Join(outputDir, asset)); err != nil {
+			t.Fatalf("expected static asset %q to be copied: %v", asset, err)
+		}
+	}
 }

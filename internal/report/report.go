@@ -1,12 +1,14 @@
-// Package report renders the aggregated GitLab tree into a single
-// self-contained HTML file with client-side drill-down navigation.
+// Package report renders the aggregated GitLab tree into a static,
+// relocatable HTML report (index.html plus its static/ CSS and JS assets)
+// with client-side drill-down navigation.
 package report
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -19,6 +21,17 @@ import (
 
 //go:embed templates/report.html.tmpl
 var reportTemplateSource string
+
+// staticAssets holds the report's CSS and JS, compiled and hand-written
+// respectively under static/ (see internal/report/tailwind for the Tailwind
+// source and `make frontend` for how static/css/app.css is regenerated).
+// They are copied next to index.html on every Render so the report stays a
+// self-contained, relocatable output directory.
+//
+//go:embed static
+var staticAssets embed.FS
+
+const staticAssetsRoot = "static"
 
 const (
 	outputFileName = "index.html"
@@ -42,8 +55,8 @@ type templateData struct {
 type checkDoc struct {
 	Short       string   `json:"short"`
 	Description string   `json:"description"`
-	Remediation []string `json:"remediation"`
 	URL         string   `json:"url"`
+	Remediation []string `json:"remediation"`
 }
 
 // Render writes a self-contained HTML report for the given tree to
@@ -73,6 +86,11 @@ func Render(root *gitlabtree.Node, outputDir string, generatedAt time.Time, gitl
 		return fmt.Errorf("creating output directory %q: %w", outputDir, err)
 	}
 
+	err = copyStaticAssets(outputDir)
+	if err != nil {
+		return fmt.Errorf("copying static assets: %w", err)
+	}
+
 	outputPath := filepath.Join(outputDir, outputFileName)
 
 	file, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, outputFilePermission) //nolint:gosec // report output is meant to be world-readable
@@ -97,6 +115,36 @@ func Render(root *gitlabtree.Node, outputDir string, generatedAt time.Time, gitl
 	err = file.Close()
 	if err != nil {
 		return fmt.Errorf("closing report file %q: %w", outputPath, err)
+	}
+
+	return nil
+}
+
+// copyStaticAssets copies the embedded static/ tree (compiled CSS and
+// hand-written JS) into outputDir, preserving its static/css/... and
+// static/js/... layout so the paths referenced by the report template
+// resolve relative to index.html.
+func copyStaticAssets(outputDir string) error {
+	err := fs.WalkDir(staticAssets, staticAssetsRoot, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		destPath := filepath.Join(outputDir, path)
+
+		if entry.IsDir() {
+			return os.MkdirAll(destPath, outputDirPermission)
+		}
+
+		contents, err := staticAssets.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading embedded asset %q: %w", path, err)
+		}
+
+		return os.WriteFile(destPath, contents, outputFilePermission)
+	})
+	if err != nil {
+		return fmt.Errorf("walking embedded static assets: %w", err)
 	}
 
 	return nil

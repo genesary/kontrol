@@ -1,0 +1,178 @@
+/* Source stylesheet for the report UI. Compiled with the standalone
+ * Tailwind CLI into ../static/css/app.css (committed, embedded via
+ * go:embed) — see `make frontend`. Never edit static/css/app.css by hand,
+ * it is generated output. */
+
+@import "tailwindcss";
+
+@source "../templates/**/*.tmpl";
+@source "../static/js/**/*.js";
+
+@theme {
+  --color-bg: #0f1115;
+  --color-panel: #171a21;
+  --color-border: #2a2f3a;
+  --color-text: #e6e9ef;
+  --color-muted: #9aa3b2;
+  --color-accent: #5b8cff;
+  --color-good: #3fbf6f;
+  --color-mid: #e0b03f;
+  --color-bad: #e0553f;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #f5f6f8;
+    --color-panel: #ffffff;
+    --color-border: #dde1e7;
+    --color-text: #1b1f27;
+    --color-muted: #5c6472;
+    --color-accent: #2f5fdb;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text;
+  }
+
+  @media print {
+    * {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-panel px-3 py-1.5 text-sm font-medium text-text shadow-sm transition-colors hover:bg-accent/10;
+  }
+
+  .card {
+    @apply rounded-lg border border-border bg-panel p-4;
+  }
+
+  .badge {
+    @apply inline-block min-w-11 rounded-full px-2 py-0.5 text-center text-sm font-semibold text-[#0b0d10];
+  }
+
+  .badge-good {
+    @apply bg-good;
+  }
+
+  .badge-mid {
+    @apply bg-mid;
+  }
+
+  .badge-bad {
+    @apply bg-bad;
+  }
+
+  .badge-none {
+    @apply bg-border text-muted;
+  }
+
+  .badge-lg {
+    @apply min-w-14 px-3 py-1 text-2xl;
+  }
+
+  .overall-card {
+    @apply min-w-[180px] text-center;
+  }
+
+  .checks-card {
+    @apply min-w-[280px] flex-1;
+  }
+
+  .checks-heading {
+    @apply mb-3 text-sm font-semibold text-muted;
+  }
+
+  .card-label {
+    @apply mt-1 text-xs text-muted;
+  }
+
+  .check-name {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .kind-icon {
+    @apply mr-1.5 opacity-70;
+  }
+
+  .count {
+    @apply text-sm text-muted;
+  }
+
+  .check-row {
+    @apply flex items-center justify-between border-b border-border py-1.5 text-sm last:border-b-0;
+  }
+
+  .web-link {
+    @apply text-sm text-accent no-underline hover:underline;
+  }
+
+  .breadcrumb-link {
+    @apply cursor-pointer text-accent no-underline hover:underline;
+  }
+
+  .children-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .children-table th {
+    @apply border-b border-border px-2.5 py-2 text-left text-xs font-semibold text-muted;
+  }
+
+  .children-table td {
+    @apply border-b border-border px-2.5 py-2.5 text-left;
+  }
+
+  .children-table tr.row-clickable {
+    @apply cursor-pointer hover:bg-accent/10;
+  }
+
+  .scan-error {
+    @apply mb-4 rounded-md border border-bad bg-bad/10 px-3 py-2.5 text-sm text-text;
+  }
+
+  .info-icon {
+    @apply relative inline-flex h-[1.1rem] w-[1.1rem] cursor-help items-center justify-center rounded-full bg-border text-[0.7rem] not-italic text-muted hover:text-text focus:text-text focus:outline-none;
+  }
+
+  .tooltip-popover {
+    @apply absolute z-20 top-6 left-0 hidden w-[600px] max-w-[90vw] cursor-pointer rounded-md border border-border bg-panel p-3 text-left text-xs font-normal leading-snug text-text shadow-lg;
+  }
+
+  .info-icon:hover .tooltip-popover,
+  .info-icon:focus .tooltip-popover,
+  .info-icon:focus-within .tooltip-popover {
+    @apply block;
+  }
+
+  .tooltip-popover.copied::after {
+    content: "Copied!";
+    @apply absolute top-1.5 right-2 text-xs font-semibold text-accent;
+  }
+
+  .tooltip-popover strong {
+    @apply mb-1 block;
+  }
+
+  .tooltip-popover p {
+    @apply mb-1.5;
+  }
+
+  .tooltip-popover ul {
+    @apply mb-1.5 list-disc pl-5;
+  }
+
+  .tooltip-popover li {
+    @apply mb-0.5;
+  }
+
+  .tooltip-popover a {
+    @apply font-semibold text-accent no-underline hover:underline;
+  }
+}
