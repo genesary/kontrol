@@ -1,0 +1,48 @@
+version: 2
+
+run:
+  timeout: 5m
+  tests: false
+
+# Output format to generate checkstyle report (used by CI)
+output:
+  formats:
+    checkstyle:
+      path: codequality/golangci-lint-report.xml
+    text:
+      path: stdout
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: github.com/genesary/security-hub
+    gofmt:
+      simplify: true
+
+linters:
+  default: all
+  disable:
+    - depguard
+    - err113
+    - exhaustruct
+    - gomodguard
+    - ireturn
+    - lll
+    - revive
+    - wsl
+  settings:
+    govet:
+      enable-all: true
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - default
+        - prefix(github.com/genesary/security-hub)
+      skip-generated: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
