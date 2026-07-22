@@ -2,14 +2,8 @@
 // self-hosted GitLab instance into a single HTML report.
 package main
 
-import (
-	"fmt"
-	"os"
-)
+import "github.com/genesary/security-hub/cmd"
 
 func main() {
-	_, err := fmt.Fprintln(os.Stdout, "security-hub: not yet implemented")
-	if err != nil {
-		os.Exit(1)
-	}
+	cmd.Execute()
 }

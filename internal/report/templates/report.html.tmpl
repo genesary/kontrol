@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>security-hub report</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #5b8cff;
+    --good: #3fbf6f;
+    --mid: #e0b03f;
+    --bad: #e0553f;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --border: #dde1e7;
+      --text: #1b1f27;
+      --muted: #5c6472;
+      --accent: #2f5fdb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 0.25rem; font-size: 1.4rem; }
+  header p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  main { max-width: 960px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  nav.breadcrumb { margin-bottom: 1rem; font-size: 0.9rem; color: var(--muted); }
+  nav.breadcrumb a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  nav.breadcrumb a:hover { text-decoration: underline; }
+  nav.breadcrumb .sep { margin: 0 0.4rem; }
+  .summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+  }
+  .overall-card { min-width: 180px; text-align: center; }
+  .overall-card .score { font-size: 2.2rem; font-weight: 700; }
+  .overall-card .label { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+  .checks-card { flex: 1; min-width: 280px; }
+  .checks-card h2 { margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+  .check-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3rem 0;
+    font-size: 0.88rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .check-row:last-child { border-bottom: none; }
+  .badge {
+    display: inline-block;
+    min-width: 2.6rem;
+    text-align: center;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: #0b0d10;
+  }
+  .badge.good { background: var(--good); }
+  .badge.mid { background: var(--mid); }
+  .badge.bad { background: var(--bad); }
+  .badge.none { background: var(--border); color: var(--muted); }
+  table.children { width: 100%; border-collapse: collapse; }
+  table.children th, table.children td {
+    text-align: left;
+    padding: 0.55rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  table.children th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+  table.children tr.row-clickable { cursor: pointer; }
+  table.children tr.row-clickable:hover { background: rgba(91, 140, 255, 0.08); }
+  .kind-icon { margin-right: 0.4rem; opacity: 0.7; }
+  .count { color: var(--muted); font-size: 0.82rem; }
+  .scan-error {
+    background: rgba(224, 85, 63, 0.12);
+    border: 1px solid var(--bad);
+    color: var(--text);
+    border-radius: 0.4rem;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+  a.web-link { color: var(--accent); text-decoration: none; font-size: 0.85rem; }
+  a.web-link:hover { text-decoration: underline; }
+  .check-name { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .info-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-style: normal;
+    line-height: 1;
+    cursor: help;
+  }
+  .info-icon:hover, .info-icon:focus { color: var(--text); outline: none; }
+  .tooltip-popover {
+    display: none;
+    position: absolute;
+    z-index: 20;
+    top: 1.5rem;
+    left: 0;
+    width: 600px;
+    max-width: min(600px, 90vw);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    padding: 0.65rem 0.75rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--text);
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+  }
+  .tooltip-popover.copied::after {
+    content: "Copied!";
+    position: absolute;
+    top: 0.4rem;
+    right: 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .info-icon:hover .tooltip-popover,
+  .info-icon:focus .tooltip-popover,
+  .info-icon:focus-within .tooltip-popover {
+    display: block;
+  }
+  .tooltip-popover strong { display: block; margin-bottom: 0.3rem; }
+  .tooltip-popover p { margin: 0 0 0.4rem; }
+  .tooltip-popover ul { margin: 0 0 0.4rem; padding-left: 1.1rem; }
+  .tooltip-popover li { margin-bottom: 0.2rem; }
+  .tooltip-popover a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .tooltip-popover a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>security-hub report</h1>
+  <p>
+    {{with .GitlabURL}}<a class="web-link" href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a> &middot; {{end}}
+    Generated {{.GeneratedAt}}
+  </p>
+</header>
+<main>
+  <nav class="breadcrumb" id="breadcrumb"></nav>
+  <div class="summary" id="summary"></div>
+  <div id="scan-error"></div>
+  <div id="children"></div>
+</main>
+<script id="report-data" type="application/json">{{.DataJSON}}</script>
+<script id="check-docs-data" type="application/json">{{.CheckDocsJSON}}</script>
+<script>
+(function () {
+  "use strict";
+
+  var GOOD_THRESHOLD = 8;
+  var MID_THRESHOLD = 5;
+
+  var root = JSON.parse(document.getElementById("report-data").textContent);
+  var checkDocs = JSON.parse(document.getElementById("check-docs-data").textContent) || {};
+  var path = [root];
+
+  function scoreClass(stat) {
+    if (!stat) return "none";
+    if (stat.average >= GOOD_THRESHOLD) return "good";
+    if (stat.average >= MID_THRESHOLD) return "mid";
+    return "bad";
+  }
+
+  function scoreText(stat) {
+    return stat ? stat.average.toFixed(1) : "N/A";
+  }
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (key) {
+      if (key === "text") {
+        node.textContent = attrs[key];
+      } else if (key === "class") {
+        node.className = attrs[key];
+      } else {
+        node.setAttribute(key, attrs[key]);
+      }
+    });
+    (children || []).forEach(function (child) { node.appendChild(child); });
+    return node;
+  }
+
+  function renderBreadcrumb() {
+    var nav = document.getElementById("breadcrumb");
+    nav.innerHTML = "";
+
+    path.forEach(function (node, index) {
+      if (index > 0) {
+        nav.appendChild(el("span", { class: "sep", text: "/" }));
+      }
+
+      var label = node.name || "root";
+      if (index === path.length - 1) {
+        nav.appendChild(el("span", { text: label }));
+
+        return;
+      }
+
+      var link = el("a", { text: label });
+      link.addEventListener("click", (function (depth) {
+        return function () {
+          path = path.slice(0, depth + 1);
+          render();
+        };
+      })(index));
+      nav.appendChild(link);
+    });
+  }
+
+  function renderInfoIcon(name) {
+    var doc = checkDocs[name];
+    if (!doc) return null;
+
+    var popoverChildren = [];
+    var textParts = [];
+    if (doc.short) {
+      popoverChildren.push(el("strong", { text: doc.short }));
+      textParts.push(doc.short);
+    }
+    if (doc.description) {
+      popoverChildren.push(el("p", { text: doc.description }));
+      textParts.push(doc.description);
+    }
+    if (doc.remediation && doc.remediation.length > 0) {
+      var items = doc.remediation.map(function (step) { return el("li", { text: step }); });
+      popoverChildren.push(el("ul", {}, items));
+      textParts.push(doc.remediation.join("\n"));
+    }
+    if (doc.url) {
+      popoverChildren.push(el("a", { href: doc.url, target: "_blank", rel: "noopener noreferrer", text: "Learn how to fix →" }));
+      textParts.push(doc.url);
+    }
+
+    var popover = el("div", { class: "tooltip-popover", title: "Click to copy" }, popoverChildren);
+    popover.addEventListener("click", function (event) {
+      if (event.target.tagName === "A") {
+        return;
+      }
+      event.stopPropagation();
+      copyToClipboard(textParts.join("\n\n"), popover);
+    });
+
+    return el("span", { class: "info-icon", tabindex: "0", "aria-label": "About " + name, text: "i" }, [popover]);
+  }
+
+  function copyToClipboard(text, target) {
+    function flash() {
+      target.classList.add("copied");
+      setTimeout(function () { target.classList.remove("copied"); }, 1200);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, function () { fallbackCopy(text, flash); });
+    } else {
+      fallbackCopy(text, flash);
+    }
+  }
+
+  function fallbackCopy(text, done) {
+    var textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+    } catch (err) {
+      // Clipboard access unavailable; nothing more we can do here.
+    }
+    document.body.removeChild(textarea);
+    done();
+  }
+
+  function renderSummary(node) {
+    var summary = document.getElementById("summary");
+    summary.innerHTML = "";
+
+    var overallBadge = el("div", { class: "badge " + scoreClass(node.score), text: scoreText(node.score) });
+    summary.appendChild(el("div", { class: "card overall-card" }, [
+      overallBadge,
+      el("div", { class: "label", text: (node.projectCount || 0) + " project(s)" }),
+    ]));
+
+    var checkNames = Object.keys(node.checks || {}).sort();
+    if (checkNames.length > 0) {
+      var rows = checkNames.map(function (name) {
+        var stat = node.checks[name];
+
+        var nameChildren = [document.createTextNode(name)];
+        var icon = renderInfoIcon(name);
+        if (icon) {
+          nameChildren.push(icon);
+        }
+
+        return el("div", { class: "check-row" }, [
+          el("span", { class: "check-name" }, nameChildren),
+          el("span", { class: "badge " + scoreClass(stat), text: scoreText(stat) }),
+        ]);
+      });
+
+      summary.appendChild(el("div", { class: "checks-card" }, [
+        el("h2", { text: "Checks" }),
+      ].concat(rows)));
+    }
+  }
+
+  function renderScanError(node) {
+    var container = document.getElementById("scan-error");
+    container.innerHTML = "";
+
+    if (node.scanError) {
+      container.appendChild(el("div", { class: "scan-error", text: "Scorecard analysis failed: " + node.scanError }));
+    }
+  }
+
+  function renderChildren(node) {
+    var container = document.getElementById("children");
+    container.innerHTML = "";
+
+    if (node.webUrl) {
+      container.appendChild(el("p", {}, [
+        el("a", { class: "web-link", href: node.webUrl, target: "_blank", rel: "noopener noreferrer", text: "Open in GitLab →" }),
+      ]));
+    }
+
+    if (!node.children || node.children.length === 0) {
+      return;
+    }
+
+    var table = el("table", { class: "children" });
+    var head = el("tr", {}, [
+      el("th", { text: "Name" }),
+      el("th", { text: "Score" }),
+      el("th", { text: "Projects" }),
+    ]);
+    table.appendChild(el("thead", {}, [head]));
+
+    var body = el("tbody");
+    node.children.forEach(function (child) {
+      var icon = child.kind === "group" ? "📁" : "📄";
+      var row = el("tr", { class: "row-clickable" }, [
+        el("td", {}, [el("span", { class: "kind-icon", text: icon }), document.createTextNode(child.name)]),
+        el("td", {}, [el("span", { class: "badge " + scoreClass(child.score), text: scoreText(child.score) })]),
+        el("td", { class: "count", text: String(child.projectCount || 0) }),
+      ]);
+      row.addEventListener("click", function () {
+        path = path.concat([child]);
+        render();
+      });
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+
+    container.appendChild(table);
+  }
+
+  function render() {
+    var current = path[path.length - 1];
+    renderBreadcrumb();
+    renderSummary(current);
+    renderScanError(current);
+    renderChildren(current);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

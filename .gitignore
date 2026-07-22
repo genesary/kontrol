@@ -64,3 +64,5 @@ coverage.out
 dependency-check/
 
 .copilot/
+
+config.yaml

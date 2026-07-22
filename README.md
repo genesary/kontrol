@@ -24,7 +24,7 @@ Instance (avg per check + overall)
 
 ## How it works
 
-1. **Discover** — recursively list groups, subgroups, and projects from the GitLab API, starting at the instance (or a configured root group).
+1. **Discover** — list every project visible to the configured token via the GitLab API. Groups and subgroups are never fetched: they're inferred directly from each project's namespaced path (`team/backend/service` implies groups `team` and `team/backend`).
 2. **Analyze** — run Scorecard against each project's repository URL, collecting a score per check (`Branch-Protection` `Code-Review`, `Dangerous-Workflow`, `Vulnerabilities`, etc.) plus Scorecard's own aggregate score. Scorecard is used as a Go library ([`github.com/ossf/scorecard`](https://github.com/ossf/scorecard)), not shelled out to.
 3. **Aggregate** — average every check bottom-up through the group tree (project → subgroup → group → instance).
 4. **Render** — emit a single self-contained HTML report with a drill-down view: instance summary first, then group → subgroup → project navigation, each level showing its own aggregated scores.
@@ -33,7 +33,33 @@ Instance (avg per check + overall)
 
 By default, `security-hub` only ever talks to the internal GitLab instance — all analysis is done against a local clone of each repository. A handful of Scorecard checks (`Vulnerabilities` via OSV.dev, `CII-Best-Practices` via bestpractices.dev, `Fuzzing`'s OSS-Fuzz status) additionally call out to public internet services regardless of where the repo is hosted. These run by default.
 
-Set `scorecard.offline: true` (or `SECURITY_HUB_OFFLINE=true`) to disable that subset and restrict the run to checks that only need the local clone and the internal GitLab API — for fully airgapped environments with zero internet egress. Disabled checks are shown in the report as "unavailable (offline mode)" rather than silently omitted.
+Set `scorecard.offline: true` (or `SECURITY_HUB_OFFLINE=true`) to disable that subset and restrict the run to checks that only need the local clone and the internal GitLab API — for fully airgapped environments with zero internet egress. Disabled checks are shown in the report as `N/A` rather than silently omitted.
+
+## Supported checks
+
+Scorecard ships more checks than GitLab can actually support: several rely on GitHub- or Azure DevOps-specific APIs and artifacts (release assets, webhooks, Actions workflow permissions) that have no GitLab equivalent. When `scorecard.checks` is left empty, security-hub requests every check below — the ones marked ❌ are silently dropped by Scorecard itself before they run (Scorecard's own check registry doesn't declare GitLab support for them), so they never appear in the report at all, not even as `N/A`. This is a structural Scorecard-for-GitLab limitation, not a security-hub bug.
+
+| Check | Runs on GitLab? | Notes |
+|---|---|---|
+| Binary-Artifacts | ✅ | |
+| Branch-Protection | ✅ | GitLab associates releases with commits rather than branches; that part of the scoring is skipped |
+| CI-Tests | ✅ | |
+| CII-Best-Practices | ✅ | Requires internet access (bestpractices.dev) — shown as `N/A` when `scorecard.offline: true` |
+| Code-Review | ✅ | |
+| Dependency-Update-Tool | ✅ | |
+| Fuzzing | ✅ | Requires internet access (OSS-Fuzz) — shown as `N/A` when `scorecard.offline: true` |
+| License | ✅ | |
+| Maintained | ✅ | |
+| Pinned-Dependencies | ✅ | |
+| Security-Policy | ✅ | |
+| Vulnerabilities | ✅ | Requires internet access (OSV.dev) — shown as `N/A` when `scorecard.offline: true` |
+| Contributors | ❌ | GitHub- and Azure DevOps-only |
+| Dangerous-Workflow | ❌ | Analyzes GitHub Actions workflow syntax |
+| Packaging | ❌ | Looks for GitHub Packages publish workflows |
+| SAST | ❌ | Looks for CodeQL/SonarCloud GitHub apps |
+| Signed-Releases | ❌ | Looks for GitHub release assets |
+| Token-Permissions | ❌ | Analyzes GitHub Actions workflow token permissions |
+| SBOM, Webhooks | ❌ | Excluded by Scorecard itself unless its experimental flag is set, which security-hub doesn't set |
 
 ## Requirements
 
@@ -51,10 +77,10 @@ Both a config file and environment variables are supported; environment variable
 gitlab:
   url: https://gitlab.example.com
   token: ${GITLAB_TOKEN}
-  root_group: ""       # empty = entire instance
 scorecard:
   checks: []            # empty = all checks
   offline: false        # true = disable checks requiring internet access
+  maxConcurrency: 5     # empty/0/negative = no concurrency limit
 output:
   path: ./report
 ```
@@ -65,6 +91,8 @@ output:
 | `GITLAB_TOKEN`          | API token used for discovery + repo access                       |
 | `SECURITY_HUB_OFFLINE`  | `true` to disable Scorecard checks that require internet access |
 
+`scorecard.maxConcurrency` bounds how many projects are scanned with Scorecard at once, so a large instance doesn't overwhelm the GitLab API or the local machine. Leave it unset (or set it to `0` or a negative number) to run every project's scan concurrently with no limit.
+
 ## Usage
 
 ```bash
@@ -73,9 +101,15 @@ security-hub scan --config config.yaml
 
 This produces a report directory (default `./report`) containing the aggregated HTML output, openable directly in a browser with no server required.
 
+Logging is structured (via [zap](https://github.com/uber-go/zap)) and written to stderr at `info` level by default. Pass `-v`/`--verbose` (works on any subcommand) to switch to `debug` level, which also surfaces per-project scan detail and otherwise-hidden diagnostic output from dependencies (e.g. Scorecard's GitLab tarball fetch attempts):
+
+```bash
+security-hub -v scan --config config.yaml
+```
+
 ## Roadmap
 
-- [ ] GitLab group/project discovery (recursive, paginated)
+- [ ] GitLab project discovery (paginated; groups inferred from project paths)
 - [ ] Scorecard integration as a Go library
 - [ ] Bottom-up aggregation across the group tree
 - [ ] Static HTML report with drill-down navigation
