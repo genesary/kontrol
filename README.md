@@ -86,6 +86,14 @@ podman run --rm -v ./config.yaml:/config.yaml:ro -v ./report:/report \
   ghcr.io/genesary/security-hub:latest scan --config /config.yaml
 ```
 
+### Container notes
+
+The image is built `FROM scratch` and runs as a non-root user (uid 1000): templates and CSS/JS are compiled into the binary, so those don't need mounting, but everything else does:
+
+- **The config file is not baked into the image** — it must be mounted, e.g. `-v ./config.yaml:/config.yaml:ro`. `GITLAB_URL`/`GITLAB_TOKEN`/etc. env vars only override values in an already-loaded config file; they can't substitute for it entirely, so the container will fail immediately without one.
+- **Only `/tmp` and whatever you mount are writable.** Every other directory in the image, including `/`, is root-owned and read-only to the `security-hub` user. Since the image sets no `WORKDIR`, the process's working directory is `/`, so a relative `output.path` like `./report` resolves to `/report` — which is why the example above mounts `-v ./report:/report` to match. If you change `output.path` in your config, either mount a volume at that same path or point it under `/tmp`, or the container will fail with a permission error creating the output directory.
+- **No `git` binary is needed or present** — repositories are fetched via the GitLab API (tarball download), not `git clone`, so the scratch image doesn't need to (and doesn't) include one.
+
 ## Configuration
 
 Both a config file and environment variables are supported; environment variables override the config file.
