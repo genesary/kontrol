@@ -24,11 +24,17 @@ type Gitlab struct {
 
 // Scorecard holds the settings controlling how OpenSSF Scorecard is run.
 type Scorecard struct {
-	Checks  []string `yaml:"checks"`
-	Offline bool     `yaml:"offline"`
+	Checks []string `yaml:"checks"`
 	// MaxConcurrency bounds how many Scorecard analyses run at once. Empty
 	// (zero) or negative means no limit.
-	MaxConcurrency int `yaml:"maxConcurrency"`
+	MaxConcurrency int  `yaml:"maxConcurrency"`
+	Offline        bool `yaml:"offline"`
+	// Experimental opts into Scorecard checks gated behind its
+	// SCORECARD_EXPERIMENTAL env var. On GitLab this currently only
+	// unlocks SBOM — Webhooks is also gated by the same var, but
+	// Scorecard's own check registry doesn't declare GitLab support for
+	// it, so it stays excluded regardless.
+	Experimental bool `yaml:"experimental"`
 }
 
 // Output holds the settings controlling where the HTML report is written.
@@ -86,6 +92,13 @@ func applyEnvOverrides(cfg *Config) {
 		offline, err := strconv.ParseBool(v)
 		if err == nil {
 			cfg.Scorecard.Offline = offline
+		}
+	}
+
+	if v := strings.TrimSpace(os.Getenv("SECURITY_HUB_EXPERIMENTAL")); v != "" {
+		experimental, err := strconv.ParseBool(v)
+		if err == nil {
+			cfg.Scorecard.Experimental = experimental
 		}
 	}
 }

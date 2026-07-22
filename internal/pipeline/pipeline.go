@@ -28,7 +28,10 @@ const unlimitedConcurrency = -1
 // against every project it finds, aggregates the results into
 // project-count-weighted averages, and renders the HTML report.
 func Run(ctx context.Context, cfg *config.Config) error {
-	zap.L().Info("Starting security-hub scan", zap.String("gitlab", cfg.Gitlab.URL), zap.Bool("offline", cfg.Scorecard.Offline))
+	zap.L().Info("Starting security-hub scan",
+		zap.String("gitlab", cfg.Gitlab.URL),
+		zap.Bool("offline", cfg.Scorecard.Offline),
+		zap.Bool("experimental", cfg.Scorecard.Experimental))
 
 	host, err := hostOf(cfg.Gitlab.URL)
 	if err != nil {
@@ -61,6 +64,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	err = os.Setenv("GITLAB_AUTH_TOKEN", cfg.Gitlab.Token)
 	if err != nil {
 		return fmt.Errorf("setting GITLAB_AUTH_TOKEN: %w", err)
+	}
+
+	if cfg.Scorecard.Experimental {
+		// Scorecard gates the SBOM check (and Webhooks, though that one
+		// stays excluded on GitLab regardless — see config.Scorecard.Experimental)
+		// behind this env var, checked inline in the check function rather
+		// than exposed as a library option.
+		err = os.Setenv("SCORECARD_EXPERIMENTAL", "1")
+		if err != nil {
+			return fmt.Errorf("setting SCORECARD_EXPERIMENTAL: %w", err)
+		}
 	}
 
 	err = scanProjects(ctx, scanOpts, projects, cfg.Scorecard.MaxConcurrency)
