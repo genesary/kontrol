@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,12 @@ var errMissingGitlabURL = errors.New("gitlab.url is required (set it in the conf
 type Gitlab struct {
 	URL   string `yaml:"url"`
 	Token string `yaml:"token"`
+	// Filters optionally restricts discovery to projects whose full path
+	// (namespace/project, e.g. "team/backend/service") matches at least
+	// one of these regular expressions. Patterns are OR'd together: a
+	// project is kept as soon as one pattern matches. Empty (the
+	// default) keeps every project visible to the token.
+	Filters []string `yaml:"filters"`
 }
 
 // Scorecard holds the settings controlling how OpenSSF Scorecard is run.
@@ -106,6 +113,13 @@ func applyEnvOverrides(cfg *Config) {
 func (cfg *Config) validate() error {
 	if strings.TrimSpace(cfg.Gitlab.URL) == "" {
 		return errMissingGitlabURL
+	}
+
+	for _, filter := range cfg.Gitlab.Filters {
+		_, err := regexp.Compile(filter)
+		if err != nil {
+			return fmt.Errorf("gitlab.filters: invalid regular expression %q: %w", filter, err)
+		}
 	}
 
 	if strings.TrimSpace(cfg.Output.Path) == "" {

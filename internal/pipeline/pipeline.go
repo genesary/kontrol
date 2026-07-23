@@ -43,7 +43,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating gitlab client: %w", err)
 	}
 
-	root, err := gitlabtree.Discover(ctx, client)
+	root, err := gitlabtree.Discover(ctx, client, cfg.Gitlab.Filters)
 	if err != nil {
 		return fmt.Errorf("discovering gitlab hierarchy: %w", err)
 	}

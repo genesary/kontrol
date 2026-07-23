@@ -56,3 +56,52 @@ func TestBuildTreeInfersGroupsFromPaths(t *testing.T) {
 		t.Fatalf("team.Children[1] = %+v, want project %q", frontend, "team/frontend")
 	}
 }
+
+// TestFilterProjectsORsPatterns asserts that filterProjects keeps a project
+// as soon as any one of several filters matches its full path, drops
+// projects matched by none, and leaves the input untouched when no filters
+// are given.
+func TestFilterProjectsORsPatterns(t *testing.T) {
+	t.Parallel()
+
+	projects := []*gitlab.Project{
+		{PathWithNamespace: "team/backend/service"},
+		{PathWithNamespace: "team/frontend"},
+		{PathWithNamespace: "standalone"},
+	}
+
+	t.Run("no filters keeps everything", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := filterProjects(projects, nil)
+		if err != nil {
+			t.Fatalf("filterProjects() error = %v, want nil", err)
+		}
+
+		if len(got) != len(projects) {
+			t.Fatalf("filterProjects() = %d projects, want %d (unchanged)", len(got), len(projects))
+		}
+	})
+
+	t.Run("matches are ORed across patterns", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := filterProjects(projects, []string{"^team/backend/", "^standalone$"})
+		if err != nil {
+			t.Fatalf("filterProjects() error = %v, want nil", err)
+		}
+
+		if len(got) != 2 || got[0].PathWithNamespace != "team/backend/service" || got[1].PathWithNamespace != "standalone" {
+			t.Fatalf("filterProjects() = %+v, want [team/backend/service, standalone]", got)
+		}
+	})
+
+	t.Run("invalid pattern returns an error", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := filterProjects(projects, []string{"("})
+		if err == nil {
+			t.Fatal("filterProjects() error = nil, want non-nil for invalid regex")
+		}
+	})
+}

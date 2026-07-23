@@ -103,6 +103,7 @@ Both a config file and environment variables are supported; environment variable
 gitlab:
   url: https://gitlab.example.com
   token: ${GITLAB_TOKEN}
+  filters: [] # optional; regexes OR'd against each project's full path (namespace/project)
 scorecard:
   checks: [] # empty = all checks
   offline: false # true = disable checks requiring internet access
@@ -111,6 +112,8 @@ scorecard:
 output:
   path: ./report
 ```
+
+`gitlab.filters` restricts discovery to projects whose full path (e.g. `team/backend/service`) matches at least one of the given regular expressions; patterns are OR'd together, so a project is kept as soon as one matches. Leaving it empty (the default) scans every project the token can see. There is no env var override for it, since it's a list rather than a single value.
 
 | Env var | Purpose |
 |-------------------------|--------------------------------------------------------------------------|

@@ -3,6 +3,7 @@ package gitlabtree
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -16,12 +17,13 @@ const listPageSize = 100
 // representing the whole GitLab instance.
 const instanceRootName = "GitLab instance"
 
-// Discover fetches every project visible to client and builds the
-// group/subgroup/project tree by splitting each project's namespaced path.
-// Groups and subgroups are never fetched from GitLab: they are inferred
-// purely from the path segments of the projects themselves. The returned
-// tree has no scores attached yet.
-func Discover(ctx context.Context, client *gitlab.Client) (*Node, error) {
+// Discover fetches every project visible to client, optionally keeps only
+// those whose full path matches at least one of filters, and builds the
+// group/subgroup/project tree by splitting each remaining project's
+// namespaced path. Groups and subgroups are never fetched from GitLab:
+// they are inferred purely from the path segments of the projects
+// themselves. The returned tree has no scores attached yet.
+func Discover(ctx context.Context, client *gitlab.Client, filters []string) (*Node, error) {
 	zap.L().Debug("Discovering GitLab projects")
 
 	projects, err := listAllProjects(ctx, client)
@@ -31,11 +33,55 @@ func Discover(ctx context.Context, client *gitlab.Client) (*Node, error) {
 
 	zap.L().Info("Fetched projects from GitLab", zap.Int("projects", len(projects)))
 
+	projects, err = filterProjects(projects, filters)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(filters) > 0 {
+		zap.L().Info("Filtered projects by gitlab.filters", zap.Int("projects", len(projects)))
+	}
+
 	root := buildTree(projects)
 
 	sortTree(root)
 
 	return root, nil
+}
+
+// filterProjects keeps only the projects whose full path (namespace/project)
+// matches at least one of the given regular expressions. filters are OR'd
+// together: each project is tested against them in order and kept as soon
+// as one matches. An empty filters list keeps every project unchanged.
+func filterProjects(projects []*gitlab.Project, filters []string) ([]*gitlab.Project, error) {
+	if len(filters) == 0 {
+		return projects, nil
+	}
+
+	patterns := make([]*regexp.Regexp, len(filters))
+
+	for index, filter := range filters {
+		pattern, err := regexp.Compile(filter)
+		if err != nil {
+			return nil, fmt.Errorf("compiling gitlab filter %q: %w", filter, err)
+		}
+
+		patterns[index] = pattern
+	}
+
+	filtered := make([]*gitlab.Project, 0, len(projects))
+
+	for _, project := range projects {
+		for _, pattern := range patterns {
+			if pattern.MatchString(project.PathWithNamespace) {
+				filtered = append(filtered, project)
+
+				break
+			}
+		}
+	}
+
+	return filtered, nil
 }
 
 func listAllProjects(ctx context.Context, client *gitlab.Client) ([]*gitlab.Project, error) {
