@@ -15,6 +15,11 @@ import (
 
 const defaultOutputPath = "./report"
 
+// outputDirPermission matches internal/report's own directory permission, so
+// the writability probe below creates the directory with the same mode the
+// report renderer will later rely on.
+const outputDirPermission = 0o755
+
 var errMissingGitlabURL = errors.New("gitlab.url is required (set it in the config file or GITLAB_URL)")
 
 // Gitlab holds the connection settings for the GitLab instance to scan.
@@ -124,6 +129,41 @@ func (cfg *Config) validate() error {
 
 	if strings.TrimSpace(cfg.Output.Path) == "" {
 		cfg.Output.Path = defaultOutputPath
+	}
+
+	err := checkOutputWritable(cfg.Output.Path)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// checkOutputWritable confirms outputDir can be created and written to,
+// creating it if necessary. Scans take a long time, so this runs at
+// configuration load rather than after the report is fully rendered, catching
+// a bad output.path before any work is done instead of after it's lost.
+func checkOutputWritable(outputDir string) error {
+	err := os.MkdirAll(outputDir, outputDirPermission)
+	if err != nil {
+		return fmt.Errorf("output.path %q: %w", outputDir, err)
+	}
+
+	probe, err := os.CreateTemp(outputDir, ".security-hub-write-test-*")
+	if err != nil {
+		return fmt.Errorf("output.path %q is not writable: %w", outputDir, err)
+	}
+
+	probePath := probe.Name()
+
+	err = probe.Close()
+	if err != nil {
+		return fmt.Errorf("output.path %q is not writable: %w", outputDir, err)
+	}
+
+	err = os.Remove(probePath)
+	if err != nil {
+		return fmt.Errorf("output.path %q: cleaning up write test file %q: %w", outputDir, probePath, err)
 	}
 
 	return nil
