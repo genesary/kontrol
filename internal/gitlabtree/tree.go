@@ -36,10 +36,12 @@ type Node struct {
 	ProjectCount int                   `json:"projectCount"`
 }
 
-// combine merges a set of ScoreStats into a single project-count-weighted
-// average, skipping nil or empty stats. It returns nil if none of the
-// inputs carry any weight.
-func combine(stats []*ScoreStat) *ScoreStat {
+// Combine merges a set of ScoreStats into a single weighted average,
+// skipping nil or empty stats. It returns nil if none of the inputs carry
+// any weight. Within the tree aggregation it weights by project count; scan
+// reuses it to weight a single project's checks by their configured
+// importance instead.
+func Combine(stats []*ScoreStat) *ScoreStat {
 	var weightedSum float64
 
 	var totalCount int

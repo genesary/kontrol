@@ -114,6 +114,7 @@ gitlab:
   token: ${GITLAB_TOKEN}
   filters: [] # optional; regexes OR'd against each project's full path (namespace/project)
 customScores: [] # empty = no custom (🧩) checks; opt in by name, e.g. ["Code-Quality", "Contributors"]
+weights: {} # optional; check name -> integer weight, see below
 scorecard:
   checks: [] # empty = all checks
   offline: false # true = disable checks requiring internet access
@@ -126,6 +127,16 @@ output:
 `gitlab.filters` restricts discovery to projects whose full path (e.g. `team/backend/service`) matches at least one of the given regular expressions; patterns are OR'd together, so a project is kept as soon as one matches. Leaving it empty (the default) scans every project the token can see. There is no env var override for it, since it's a list rather than a single value.
 
 `customScores` opts in to security-hub's own 🧩 checks (see [Supported checks](#supported-checks)) by name, currently `Code-Quality` and `Contributors`. Unlike `scorecard.checks`, an empty list (the default) runs *none* of them rather than all of them: these checks make extra GitLab API calls per project, so they stay opt-in. There is no env var override for it either.
+
+`weights` maps a check name (any Scorecard check or one of the 🧩 custom checks) to an integer weight controlling how much it counts toward a project's overall score. A check with no entry defaults to weight `1`. A weight of `0` means the check is not run at all, whether it's a Scorecard check (as if left out of `scorecard.checks`) or a custom one (as if left out of `customScores`), so it's also omitted from the report entirely rather than shown as `N/A`. Leaving `weights` empty (the default) leaves the overall score exactly as Scorecard computes it today, via its own fixed risk-tier weighting, and custom checks stay excluded from that number. As soon as `weights` has at least one entry, security-hub switches to computing the overall score itself, as a weighted mean across every check that ran (Scorecard's and any enabled custom checks alike):
+
+```yaml
+weights:
+  Vulnerabilities: 3 # counts 3x as much as an unweighted check
+  Code-Quality: 0 # don't run this check at all
+```
+
+There is no env var override for it, since it's a map rather than a single value.
 
 | Env var | Purpose |
 |-------------------------|--------------------------------------------------------------------------|

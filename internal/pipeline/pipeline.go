@@ -58,25 +58,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		CustomChecks: cfg.CustomScores,
 		Offline:      cfg.Scorecard.Offline,
 		GitlabClient: client,
+		Weights:      cfg.Weights,
 	}
 
-	// Scorecard's GitLab client reads this env var directly (independent of
-	// the token passed to gitlabrepo.CreateGitlabClientWithToken) for its
-	// GraphQL-based merge request lookups and tarball download auth header.
-	err = os.Setenv("GITLAB_AUTH_TOKEN", cfg.Gitlab.Token)
+	err = setScorecardEnv(cfg)
 	if err != nil {
-		return fmt.Errorf("setting GITLAB_AUTH_TOKEN: %w", err)
-	}
-
-	if cfg.Scorecard.Experimental {
-		// Scorecard gates the SBOM check (and Webhooks, though that one
-		// stays excluded on GitLab regardless, see config.Scorecard.Experimental)
-		// behind this env var, checked inline in the check function rather
-		// than exposed as a library option.
-		err = os.Setenv("SCORECARD_EXPERIMENTAL", "1")
-		if err != nil {
-			return fmt.Errorf("setting SCORECARD_EXPERIMENTAL: %w", err)
-		}
+		return err
 	}
 
 	err = scanProjects(ctx, scanOpts, projects, cfg.Scorecard.MaxConcurrency)
@@ -93,6 +80,33 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	zap.L().Info("Report written", zap.String("path", cfg.Output.Path))
+
+	return nil
+}
+
+// setScorecardEnv exports the env vars Scorecard's GitLab client reads
+// directly, independent of the token/options passed to it as a library.
+func setScorecardEnv(cfg *config.Config) error {
+	// Scorecard's GitLab client reads this env var directly (independent of
+	// the token passed to gitlabrepo.CreateGitlabClientWithToken) for its
+	// GraphQL-based merge request lookups and tarball download auth header.
+	err := os.Setenv("GITLAB_AUTH_TOKEN", cfg.Gitlab.Token)
+	if err != nil {
+		return fmt.Errorf("setting GITLAB_AUTH_TOKEN: %w", err)
+	}
+
+	if !cfg.Scorecard.Experimental {
+		return nil
+	}
+
+	// Scorecard gates the SBOM check (and Webhooks, though that one stays
+	// excluded on GitLab regardless, see config.Scorecard.Experimental)
+	// behind this env var, checked inline in the check function rather than
+	// exposed as a library option.
+	err = os.Setenv("SCORECARD_EXPERIMENTAL", "1")
+	if err != nil {
+		return fmt.Errorf("setting SCORECARD_EXPERIMENTAL: %w", err)
+	}
 
 	return nil
 }

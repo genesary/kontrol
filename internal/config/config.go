@@ -64,8 +64,17 @@ type Config struct {
 	// empty list here means none of them run, not all of them: these checks
 	// make extra GitLab API calls per project, so they stay opt-in rather
 	// than opt-out.
-	CustomScores []string  `yaml:"customScores"`
-	Scorecard    Scorecard `yaml:"scorecard"`
+	CustomScores []string `yaml:"customScores"`
+	// Weights overrides how much each check counts toward a project's
+	// overall score. A check name (Scorecard's or one listed in
+	// CustomScores) with no entry here defaults to weight 1; a weight of 0
+	// means the check is not run at all, the same as leaving it out of
+	// scorecard.checks or CustomScores. Configuring any weight switches the
+	// overall score from Scorecard's own risk-tier-weighted formula to
+	// security-hub's own weighted mean across every check that ran, so
+	// weights actually affect the number reported.
+	Weights   map[string]int `yaml:"weights"`
+	Scorecard Scorecard      `yaml:"scorecard"`
 }
 
 // Load reads the YAML configuration file at path, applies environment
@@ -131,6 +140,12 @@ func (cfg *Config) validate() error {
 		_, err := regexp.Compile(filter)
 		if err != nil {
 			return fmt.Errorf("gitlab.filters: invalid regular expression %q: %w", filter, err)
+		}
+	}
+
+	for name, weight := range cfg.Weights {
+		if weight < 0 {
+			return fmt.Errorf("weights: %q: weight must be >= 0, got %d", name, weight)
 		}
 	}
 

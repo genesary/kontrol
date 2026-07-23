@@ -22,15 +22,34 @@ import (
 // Options configures how Scorecard analyzes each project.
 type Options struct {
 	GitlabClient *gitlab.Client
-	Host         string
-	Token        string
-	Checks       []string
+	// Weights overrides how much each check (by name, Scorecard's or one
+	// listed in CustomChecks) counts toward the overall score. A name with
+	// no entry defaults to weight 1; a weight of 0 means the check is
+	// skipped entirely rather than merely excluded from the average.
+	Weights map[string]int
+	Host    string
+	Token   string
+	Checks  []string
 	// CustomChecks lists the security-hub-native checks (internal/customchecks)
 	// to run, by name. Unlike Checks, an empty list means none of them run,
 	// not all of them: these checks make extra GitLab API calls per project,
 	// so they stay opt-in.
 	CustomChecks []string
 	Offline      bool
+}
+
+// defaultWeight is the weight assumed for any check with no entry in
+// Options.Weights.
+const defaultWeight = 1
+
+// weightFor looks up name's configured weight, defaulting to defaultWeight
+// when unset.
+func weightFor(name string, weights map[string]int) int {
+	if w, ok := weights[name]; ok {
+		return w
+	}
+
+	return defaultWeight
 }
 
 // Project runs Scorecard against a single GitLab project (addressed by its
@@ -58,10 +77,7 @@ func Project(ctx context.Context, opts Options, fullPath string) (*gitlabtree.Sc
 		return nil, nil, fmt.Errorf("running scorecard for %q: %w", fullPath, err)
 	}
 
-	overall, checkScores, err := toScoreStats(result)
-	if err != nil {
-		return nil, nil, fmt.Errorf("scoring scorecard result for %q: %w", fullPath, err)
-	}
+	checkScores := toScoreStats(result, opts.Weights)
 
 	// Checks skipped by our own offline filter never reach Scorecard, so they
 	// never appear in result.Checks. Add them as nil (rendered as "N/A") so
@@ -72,27 +88,76 @@ func Project(ctx context.Context, opts Options, fullPath string) (*gitlabtree.Sc
 
 	enabledCustomChecks := toSet(opts.CustomChecks)
 
-	if enabledCustomChecks[customchecks.CheckCodeQuality] {
-		runCustomCheck(checkScores, customchecks.CheckCodeQuality, fullPath, func() (*gitlabtree.ScoreStat, error) {
-			return customchecks.CodeQuality(ctx, opts.GitlabClient, fullPath)
-		})
+	if enabledCustomChecks[customchecks.CheckCodeQuality] && weightFor(customchecks.CheckCodeQuality, opts.Weights) != 0 {
+		runCustomCheck(checkScores, customchecks.CheckCodeQuality, weightFor(customchecks.CheckCodeQuality, opts.Weights), fullPath,
+			func() (*gitlabtree.ScoreStat, error) {
+				return customchecks.CodeQuality(ctx, opts.GitlabClient, fullPath)
+			})
 	}
 
-	if enabledCustomChecks[customchecks.CheckContributors] {
-		runCustomCheck(checkScores, customchecks.CheckContributors, fullPath, func() (*gitlabtree.ScoreStat, error) {
-			return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
-		})
+	if enabledCustomChecks[customchecks.CheckContributors] && weightFor(customchecks.CheckContributors, opts.Weights) != 0 {
+		runCustomCheck(checkScores, customchecks.CheckContributors, weightFor(customchecks.CheckContributors, opts.Weights), fullPath,
+			func() (*gitlabtree.ScoreStat, error) {
+				return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
+			})
+	}
+
+	overall, err := overallScoreFor(result, checkScores, opts.Weights)
+	if err != nil {
+		return nil, nil, fmt.Errorf("scoring scorecard result for %q: %w", fullPath, err)
 	}
 
 	return overall, checkScores, nil
 }
 
+// overallScoreFor computes a project's overall score. With no weights
+// configured, it defers entirely to Scorecard's own risk-tier-weighted
+// GetAggregateScore, unchanged from security-hub's original behavior (which
+// never sees CustomScores checks). As soon as any weight is configured, it
+// instead combines every check present in checkScores (Scorecard's and
+// CustomScores', already Count-weighted by toScoreStats/runCustomCheck)
+// into security-hub's own weighted mean, so weights actually change the
+// number.
+func overallScoreFor(
+	result scorecard.Result, checkScores map[string]*gitlabtree.ScoreStat, weights map[string]int,
+) (*gitlabtree.ScoreStat, error) {
+	if len(weights) == 0 {
+		doc, err := docChecks.Read()
+		if err != nil {
+			return nil, fmt.Errorf("reading scorecard checks documentation: %w", err)
+		}
+
+		overall, err := result.GetAggregateScore(doc)
+		if err != nil {
+			return nil, fmt.Errorf("computing aggregate score: %w", err)
+		}
+
+		if overall < 0 {
+			return nil, nil //nolint:nilnil // nil, nil means "inconclusive", not a failure
+		}
+
+		return &gitlabtree.ScoreStat{Average: overall, Count: 1}, nil
+	}
+
+	stats := make([]*gitlabtree.ScoreStat, 0, len(checkScores))
+	for _, stat := range checkScores {
+		stats = append(stats, stat)
+	}
+
+	combined := gitlabtree.Combine(stats)
+	if combined == nil {
+		return nil, nil //nolint:nilnil // nil, nil means "inconclusive", not a failure
+	}
+
+	return &gitlabtree.ScoreStat{Average: combined.Average, Count: 1}, nil
+}
+
 // runCustomCheck computes a security-hub-native check and records its result
-// under name. Unlike a Scorecard-side failure, an error here is logged and
-// recorded as nil (rendered as "N/A") rather than propagated: a flaky custom
-// check must not abort the whole project's scan.
+// under name, rescaled to weight. Unlike a Scorecard-side failure, an error
+// here is logged and recorded as nil (rendered as "N/A") rather than
+// propagated: a flaky custom check must not abort the whole project's scan.
 func runCustomCheck(
-	checkScores map[string]*gitlabtree.ScoreStat, name, fullPath string, run func() (*gitlabtree.ScoreStat, error),
+	checkScores map[string]*gitlabtree.ScoreStat, name string, weight int, fullPath string, run func() (*gitlabtree.ScoreStat, error),
 ) {
 	stat, err := run()
 	if err != nil {
@@ -107,6 +172,7 @@ func runCustomCheck(
 		return
 	}
 
+	stat.Count = weight
 	checkScores[name] = stat
 }
 
@@ -124,7 +190,9 @@ func toSet(names []string) map[string]bool {
 
 // resolveChecks expands Options into the explicit list of check names
 // Scorecard should run, plus (when offline) the names filtered out because
-// they require internet access.
+// they require internet access. A weight of 0 drops a check from the
+// candidate list entirely, before the offline split, so it's never sent to
+// Scorecard and never appears in the report, not even as "N/A".
 func resolveChecks(opts Options) ([]string, []string) {
 	candidates := opts.Checks
 	if len(candidates) == 0 {
@@ -133,6 +201,8 @@ func resolveChecks(opts Options) ([]string, []string) {
 			candidates = append(candidates, name)
 		}
 	}
+
+	candidates = withoutZeroWeight(candidates, opts.Weights)
 
 	if !opts.Offline {
 		return candidates, nil
@@ -153,6 +223,25 @@ func resolveChecks(opts Options) ([]string, []string) {
 	return toRun, skippedOffline
 }
 
+// withoutZeroWeight drops any name whose configured weight is exactly 0. An
+// empty weights map is a no-op fast path, so behavior is unchanged when
+// weights aren't configured at all.
+func withoutZeroWeight(names []string, weights map[string]int) []string {
+	if len(weights) == 0 {
+		return names
+	}
+
+	kept := make([]string, 0, len(names))
+
+	for _, name := range names {
+		if weightFor(name, weights) != 0 {
+			kept = append(kept, name)
+		}
+	}
+
+	return kept
+}
+
 // isOfflineUnsafe reports whether a Scorecard check calls out to a public
 // internet service (OSV.dev, bestpractices.dev, OSS-Fuzz, deps.dev) and so
 // must be skipped in offline mode.
@@ -169,23 +258,14 @@ func isOfflineUnsafe(name string) bool {
 	}
 }
 
-// toScoreStats converts a raw Scorecard result into weight-1 ScoreStats. Every
-// requested check is included as a key, even when Scorecard couldn't reach a
-// conclusion for it (a nil stat, rendered as "N/A" in the report). A missing
-// key would otherwise be indistinguishable from a check that was never
-// requested at all. Inconclusive checks carry no weight, so they never skew
-// tree-wide averages.
-func toScoreStats(result scorecard.Result) (*gitlabtree.ScoreStat, map[string]*gitlabtree.ScoreStat, error) {
-	doc, err := docChecks.Read()
-	if err != nil {
-		return nil, nil, fmt.Errorf("reading scorecard checks documentation: %w", err)
-	}
-
-	overall, err := result.GetAggregateScore(doc)
-	if err != nil {
-		return nil, nil, fmt.Errorf("computing aggregate score: %w", err)
-	}
-
+// toScoreStats converts a raw Scorecard result into ScoreStats weighted per
+// opts.Weights (weight 1 for any check with no entry). Every requested check
+// is included as a key, even when Scorecard couldn't reach a conclusion for
+// it (a nil stat, rendered as "N/A" in the report). A missing key would
+// otherwise be indistinguishable from a check that was never requested at
+// all. Inconclusive checks carry no weight, so they never skew tree-wide
+// averages.
+func toScoreStats(result scorecard.Result, weights map[string]int) map[string]*gitlabtree.ScoreStat {
 	checkScores := make(map[string]*gitlabtree.ScoreStat, len(result.Checks))
 
 	for _, check := range result.Checks {
@@ -201,13 +281,8 @@ func toScoreStats(result scorecard.Result) (*gitlabtree.ScoreStat, map[string]*g
 			continue
 		}
 
-		checkScores[check.Name] = &gitlabtree.ScoreStat{Average: float64(check.Score), Count: 1}
+		checkScores[check.Name] = &gitlabtree.ScoreStat{Average: float64(check.Score), Count: weightFor(check.Name, weights)}
 	}
 
-	var overallStat *gitlabtree.ScoreStat
-	if overall >= 0 {
-		overallStat = &gitlabtree.ScoreStat{Average: overall, Count: 1}
-	}
-
-	return overallStat, checkScores, nil
+	return checkScores
 }

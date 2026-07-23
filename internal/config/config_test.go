@@ -92,3 +92,50 @@ func TestLoadFailsWhenOutputPathIsAFile(t *testing.T) {
 		t.Fatalf("Load() error = nil, want an error when output.path %q is a file", outputPath)
 	}
 }
+
+func TestLoadParsesWeights(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	outputPath := filepath.Join(t.TempDir(), "report")
+
+	contents := "gitlab:\n  url: https://gitlab.example.com\n" +
+		"output:\n  path: " + outputPath + "\n" +
+		"weights:\n  Vulnerabilities: 3\n  Code-Quality: 0\n"
+
+	err := os.WriteFile(configPath, []byte(contents), 0o600)
+	if err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+
+	want := map[string]int{"Vulnerabilities": 3, "Code-Quality": 0}
+	if len(cfg.Weights) != len(want) || cfg.Weights["Vulnerabilities"] != 3 || cfg.Weights["Code-Quality"] != 0 {
+		t.Fatalf("Weights = %v, want %v", cfg.Weights, want)
+	}
+}
+
+func TestLoadRejectsNegativeWeight(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	outputPath := filepath.Join(t.TempDir(), "report")
+
+	contents := "gitlab:\n  url: https://gitlab.example.com\n" +
+		"output:\n  path: " + outputPath + "\n" +
+		"weights:\n  Vulnerabilities: -1\n"
+
+	err := os.WriteFile(configPath, []byte(contents), 0o600)
+	if err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	_, err = Load(configPath)
+	if err == nil {
+		t.Fatalf("Load() error = nil, want an error for a negative weight")
+	}
+}

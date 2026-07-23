@@ -29,12 +29,12 @@ func Aggregate(node *Node) {
 	}
 
 	node.ProjectCount = projectCount
-	node.Score = combine(scores)
+	node.Score = Combine(scores)
 	node.Checks = combineChecks(checkScores)
 }
 
 // combineChecks rolls up each check by name across children. A check keeps
-// its key even when every child was inconclusive for it (combine returns nil
+// its key even when every child was inconclusive for it (Combine returns nil
 // in that case), so it still renders as "N/A" instead of silently
 // disappearing from the report at this level of the tree.
 func combineChecks(checkScores map[string][]*ScoreStat) map[string]*ScoreStat {
@@ -45,7 +45,7 @@ func combineChecks(checkScores map[string][]*ScoreStat) map[string]*ScoreStat {
 	combined := make(map[string]*ScoreStat, len(checkScores))
 
 	for name, stats := range checkScores {
-		combined[name] = combine(stats)
+		combined[name] = Combine(stats)
 	}
 
 	return combined
