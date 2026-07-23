@@ -52,10 +52,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	zap.L().Info("Discovery complete", zap.Int("projects", len(projects)))
 
 	scanOpts := scan.Options{
-		Host:    host,
-		Token:   cfg.Gitlab.Token,
-		Checks:  cfg.Scorecard.Checks,
-		Offline: cfg.Scorecard.Offline,
+		Host:         host,
+		Token:        cfg.Gitlab.Token,
+		Checks:       cfg.Scorecard.Checks,
+		CustomChecks: cfg.CustomScores,
+		Offline:      cfg.Scorecard.Offline,
+		GitlabClient: client,
 	}
 
 	// Scorecard's GitLab client reads this env var directly (independent of
@@ -68,7 +70,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	if cfg.Scorecard.Experimental {
 		// Scorecard gates the SBOM check (and Webhooks, though that one
-		// stays excluded on GitLab regardless — see config.Scorecard.Experimental)
+		// stays excluded on GitLab regardless, see config.Scorecard.Experimental)
 		// behind this env var, checked inline in the check function rather
 		// than exposed as a library option.
 		err = os.Setenv("SCORECARD_EXPERIMENTAL", "1")

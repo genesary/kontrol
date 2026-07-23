@@ -35,7 +35,7 @@ Set `scorecard.offline: true` (or `SECURITY_HUB_OFFLINE=true`) to disable that s
 
 ## Supported checks
 
-Scorecard ships more checks than GitLab actually supports: several rely on GitHub- or Azure DevOps-specific APIs and artifacts (release assets, webhooks, Actions workflow permissions) that have no GitLab equivalent. When `scorecard.checks` is left empty, security-hub requests every check marked ✅ below. Checks marked ❌ are silently dropped by Scorecard itself before the run (Scorecard's own check registry doesn't declare GitLab support for them), so they never appear in the report at all, not even as `N/A`. This is a structural Scorecard-for-GitLab limitation, not a security-hub bug. Checks marked ⚠️ work on GitLab but are opt-in: see [Experimental checks](#experimental-checks).
+Scorecard ships more checks than GitLab actually supports: several rely on GitHub- or Azure DevOps-specific APIs and artifacts (release assets, webhooks, Actions workflow permissions) that have no GitLab equivalent. When `scorecard.checks` is left empty, security-hub requests every check marked ✅ below. Checks marked ❌ are silently dropped by Scorecard itself before the run (Scorecard's own check registry doesn't declare GitLab support for them), so they never appear in the report at all, not even as `N/A`. This is a structural Scorecard-for-GitLab limitation, not a security-hub bug. Checks marked ⚠️ work on GitLab but are opt-in: see [Experimental checks](#experimental-checks). Checks marked 🧩 are security-hub's own, computed directly from the GitLab API rather than run through Scorecard, since Scorecard's check registry excludes them for GitLab regardless of `scorecard.checks`. Unlike Scorecard's own checks, 🧩 checks are opt-in individually via the root-level `customScores` list; leaving it empty (the default) runs none of them, see below.
 
 | Check | Runs on GitLab? | Notes |
 |---|---|---|
@@ -51,7 +51,8 @@ Scorecard ships more checks than GitLab actually supports: several rely on GitHu
 | Pinned-Dependencies | ✅ | |
 | Security-Policy | ✅ | |
 | Vulnerabilities | ✅ | Requires internet access (OSV.dev), shown `N/A` when `scorecard.offline: true` |
-| Contributors | ❌ | GitHub- and Azure DevOps-only |
+| Code-Quality | 🧩 | security-hub-native, not a Scorecard check. Scores whether recent pipelines upload a `codequality`-type artifact. **Not a security/SAST check**, see the `SAST` row below |
+| Contributors | 🧩 | security-hub-native reimplementation (Scorecard's own registry still excludes GitLab). GitLab's API exposes no organization/company data, so this is a bus-factor/headcount proxy, not Scorecard's organizational-diversity measure |
 | Dangerous-Workflow | ❌ | Analyzes GitHub Actions workflow syntax |
 | Packaging | ❌ | Looks for GitHub Packages publish workflows |
 | SAST | ❌ | Looks for CodeQL/SonarCloud GitHub apps |
@@ -59,6 +60,14 @@ Scorecard ships more checks than GitLab actually supports: several rely on GitHu
 | Token-Permissions | ❌ | Analyzes GitHub Actions workflow token permissions |
 | Webhooks | ❌ | GitHub-only per Scorecard's own check registry, despite the GitLab client implementing `ListWebhooks` |
 | SBOM | ⚠️ | Runs on GitLab, but disabled by Scorecard unless `scorecard.experimental: true` (or `SECURITY_HUB_EXPERIMENTAL=true`) is set, see [Experimental checks](#experimental-checks) |
+
+Code-Quality and Contributors are gated by the root-level `customScores` setting, not by `scorecard.checks`/`scorecard.offline` (they call the same internal GitLab API already required for discovery, so offline mode doesn't affect them either):
+
+```yaml
+customScores: ["Code-Quality", "Contributors"] # empty (the default) runs neither
+```
+
+Once enabled, each is shown as `N/A` only if the underlying GitLab API call itself fails for a given project.
 
 ### Experimental checks
 
@@ -90,9 +99,9 @@ podman run --rm -v ./config.yaml:/config.yaml:ro -v ./report:/report \
 
 The image is built `FROM scratch` and runs as a non-root user (uid 1000): templates and CSS/JS are compiled into the binary, so those don't need mounting, but everything else does:
 
-- **The config file is not baked into the image** — it must be mounted, e.g. `-v ./config.yaml:/config.yaml:ro`. `GITLAB_URL`/`GITLAB_TOKEN`/etc. env vars only override values in an already-loaded config file; they can't substitute for it entirely, so the container will fail immediately without one.
-- **Only `/tmp` and whatever you mount are writable.** Every other directory in the image, including `/`, is root-owned and read-only to the `security-hub` user. Since the image sets no `WORKDIR`, the process's working directory is `/`, so a relative `output.path` like `./report` resolves to `/report` — which is why the example above mounts `-v ./report:/report` to match. If you change `output.path` in your config, either mount a volume at that same path or point it under `/tmp`, or the container will fail with a permission error creating the output directory.
-- **No `git` binary is needed or present** — repositories are fetched via the GitLab API (tarball download), not `git clone`, so the scratch image doesn't need to (and doesn't) include one.
+- **The config file is not baked into the image**, it must be mounted, e.g. `-v ./config.yaml:/config.yaml:ro`. `GITLAB_URL`/`GITLAB_TOKEN`/etc. env vars only override values in an already-loaded config file; they can't substitute for it entirely, so the container will fail immediately without one.
+- **Only `/tmp` and whatever you mount are writable.** Every other directory in the image, including `/`, is root-owned and read-only to the `security-hub` user. Since the image sets no `WORKDIR`, the process's working directory is `/`, so a relative `output.path` like `./report` resolves to `/report`, which is why the example above mounts `-v ./report:/report` to match. If you change `output.path` in your config, either mount a volume at that same path or point it under `/tmp`, or the container will fail with a permission error creating the output directory.
+- **No `git` binary is needed or present**, repositories are fetched via the GitLab API (tarball download), not `git clone`, so the scratch image doesn't need to (and doesn't) include one.
 
 ## Configuration
 
@@ -104,6 +113,7 @@ gitlab:
   url: https://gitlab.example.com
   token: ${GITLAB_TOKEN}
   filters: [] # optional; regexes OR'd against each project's full path (namespace/project)
+customScores: [] # empty = no custom (🧩) checks; opt in by name, e.g. ["Code-Quality", "Contributors"]
 scorecard:
   checks: [] # empty = all checks
   offline: false # true = disable checks requiring internet access
@@ -114,6 +124,8 @@ output:
 ```
 
 `gitlab.filters` restricts discovery to projects whose full path (e.g. `team/backend/service`) matches at least one of the given regular expressions; patterns are OR'd together, so a project is kept as soon as one matches. Leaving it empty (the default) scans every project the token can see. There is no env var override for it, since it's a list rather than a single value.
+
+`customScores` opts in to security-hub's own 🧩 checks (see [Supported checks](#supported-checks)) by name, currently `Code-Quality` and `Contributors`. Unlike `scorecard.checks`, an empty list (the default) runs *none* of them rather than all of them: these checks make extra GitLab API calls per project, so they stay opt-in. There is no env var override for it either.
 
 | Env var | Purpose |
 |-------------------------|--------------------------------------------------------------------------|

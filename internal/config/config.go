@@ -43,7 +43,7 @@ type Scorecard struct {
 	Offline        bool `yaml:"offline"`
 	// Experimental opts into Scorecard checks gated behind its
 	// SCORECARD_EXPERIMENTAL env var. On GitLab this currently only
-	// unlocks SBOM — Webhooks is also gated by the same var, but
+	// unlocks SBOM & Webhooks is also gated by the same var, but
 	// Scorecard's own check registry doesn't declare GitLab support for
 	// it, so it stays excluded regardless.
 	Experimental bool `yaml:"experimental"`
@@ -56,9 +56,16 @@ type Output struct {
 
 // Config is the root configuration for security-hub.
 type Config struct {
-	Gitlab    Gitlab    `yaml:"gitlab"`
-	Output    Output    `yaml:"output"`
-	Scorecard Scorecard `yaml:"scorecard"`
+	Output Output `yaml:"output"`
+	Gitlab Gitlab `yaml:"gitlab"`
+	// CustomScores opts in to security-hub's own GitLab-native checks (see
+	// internal/customchecks), each named after the check it reports under
+	// (e.g. "Code-Quality", "Contributors"). Unlike scorecard.checks, an
+	// empty list here means none of them run, not all of them: these checks
+	// make extra GitLab API calls per project, so they stay opt-in rather
+	// than opt-out.
+	CustomScores []string  `yaml:"customScores"`
+	Scorecard    Scorecard `yaml:"scorecard"`
 }
 
 // Load reads the YAML configuration file at path, applies environment

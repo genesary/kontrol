@@ -159,28 +159,32 @@ func collectCheckDocs(root *gitlabtree.Node) map[string]checkDoc {
 	names := make(map[string]struct{})
 	collectCheckNames(root, names)
 
+	checkDocs := make(map[string]checkDoc, len(names))
+
 	docs, err := docChecks.Read()
 	if err != nil {
 		zap.L().Warn("Failed to load Scorecard check documentation", zap.Error(err))
+	} else {
+		for name := range names {
+			doc, err := docs.GetCheck(name)
+			if err != nil {
+				zap.L().Warn("No Scorecard documentation for check", zap.String("check", name), zap.Error(err))
 
-		return nil
+				continue
+			}
+
+			checkDocs[name] = checkDoc{
+				Short:       doc.GetShort(),
+				Description: doc.GetDescription(),
+				Remediation: doc.GetRemediation(),
+				URL:         doc.GetDocumentationURL(""),
+			}
+		}
 	}
 
-	checkDocs := make(map[string]checkDoc, len(names))
-
-	for name := range names {
-		doc, err := docs.GetCheck(name)
-		if err != nil {
-			zap.L().Warn("No Scorecard documentation for check", zap.String("check", name), zap.Error(err))
-
-			continue
-		}
-
-		checkDocs[name] = checkDoc{
-			Short:       doc.GetShort(),
-			Description: doc.GetDescription(),
-			Remediation: doc.GetRemediation(),
-			URL:         doc.GetDocumentationURL(""),
+	for name, doc := range customCheckDocs() {
+		if _, requested := names[name]; requested {
+			checkDocs[name] = doc
 		}
 	}
 

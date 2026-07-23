@@ -12,22 +12,25 @@ import (
 	"github.com/ossf/scorecard/v5/clients/gitlabrepo"
 	docChecks "github.com/ossf/scorecard/v5/docs/checks"
 	"github.com/ossf/scorecard/v5/pkg/scorecard"
+	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 	"go.uber.org/zap"
 
+	"github.com/genesary/security-hub/internal/customchecks"
 	"github.com/genesary/security-hub/internal/gitlabtree"
 )
 
 // Options configures how Scorecard analyzes each project.
 type Options struct {
-	// Host is the GitLab instance host without scheme, e.g. "gitlab.example.com".
-	Host string
-	// Token authenticates against the GitLab instance's API.
-	Token string
-	// Checks restricts analysis to an explicit subset; empty means every
-	// check Scorecard supports.
-	Checks []string
-	// Offline disables checks that call out to public internet services.
-	Offline bool
+	GitlabClient *gitlab.Client
+	Host         string
+	Token        string
+	Checks       []string
+	// CustomChecks lists the security-hub-native checks (internal/customchecks)
+	// to run, by name. Unlike Checks, an empty list means none of them run,
+	// not all of them: these checks make extra GitLab API calls per project,
+	// so they stay opt-in.
+	CustomChecks []string
+	Offline      bool
 }
 
 // Project runs Scorecard against a single GitLab project (addressed by its
@@ -67,7 +70,56 @@ func Project(ctx context.Context, opts Options, fullPath string) (*gitlabtree.Sc
 		checkScores[name] = nil
 	}
 
+	enabledCustomChecks := toSet(opts.CustomChecks)
+
+	if enabledCustomChecks[customchecks.CheckCodeQuality] {
+		runCustomCheck(checkScores, customchecks.CheckCodeQuality, fullPath, func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.CodeQuality(ctx, opts.GitlabClient, fullPath)
+		})
+	}
+
+	if enabledCustomChecks[customchecks.CheckContributors] {
+		runCustomCheck(checkScores, customchecks.CheckContributors, fullPath, func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
+		})
+	}
+
 	return overall, checkScores, nil
+}
+
+// runCustomCheck computes a security-hub-native check and records its result
+// under name. Unlike a Scorecard-side failure, an error here is logged and
+// recorded as nil (rendered as "N/A") rather than propagated: a flaky custom
+// check must not abort the whole project's scan.
+func runCustomCheck(
+	checkScores map[string]*gitlabtree.ScoreStat, name, fullPath string, run func() (*gitlabtree.ScoreStat, error),
+) {
+	stat, err := run()
+	if err != nil {
+		zap.L().Warn("Custom check failed",
+			zap.String("check", name),
+			zap.String("project", fullPath),
+			zap.Error(err),
+		)
+
+		checkScores[name] = nil
+
+		return
+	}
+
+	checkScores[name] = stat
+}
+
+// toSet converts a name list into a membership set, so callers can check
+// "is this name requested" in constant time regardless of list length.
+func toSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+
+	for _, name := range names {
+		set[name] = true
+	}
+
+	return set
 }
 
 // resolveChecks expands Options into the explicit list of check names
@@ -119,7 +171,7 @@ func isOfflineUnsafe(name string) bool {
 
 // toScoreStats converts a raw Scorecard result into weight-1 ScoreStats. Every
 // requested check is included as a key, even when Scorecard couldn't reach a
-// conclusion for it (a nil stat, rendered as "N/A" in the report) — a missing
+// conclusion for it (a nil stat, rendered as "N/A" in the report). A missing
 // key would otherwise be indistinguishable from a check that was never
 // requested at all. Inconclusive checks carry no weight, so they never skew
 // tree-wide averages.

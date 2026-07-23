@@ -1,6 +1,6 @@
 /* Source stylesheet for the report UI. Compiled with the standalone
  * Tailwind CLI into ../static/css/app.css (committed, embedded via
- * go:embed) — see `make frontend`. Never edit static/css/app.css by hand,
+ * go:embed), see `make frontend`. Never edit static/css/app.css by hand,
  * it is generated output. */
 
 @import "tailwindcss";
