@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/genesary/security-hub/internal/config"
-	"github.com/genesary/security-hub/internal/pipeline"
+	"github.com/boxboxjason/security-hub/internal/config"
+	"github.com/boxboxjason/security-hub/internal/pipeline"
 )
 
 const defaultConfigPath = "config.yaml"

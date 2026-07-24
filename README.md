@@ -87,14 +87,14 @@ Webhooks is gated by the same env var upstream, but setting it won't help here: 
 
 ```bash
 # From source
-go install github.com/genesary/security-hub@latest
+go install github.com/boxboxjason/security-hub@latest
 
 # Or grab a prebuilt binary (linux/windows/darwin, amd64/arm64) from the
 # GitHub Releases page
 
 # Or run the container image
 podman run --rm -v ./config.yaml:/config.yaml:ro -v ./report:/report \
-  ghcr.io/genesary/security-hub:latest scan --config /config.yaml
+  ghcr.io/boxboxjason/security-hub:latest scan --config /config.yaml
 ```
 
 ### Container notes
@@ -175,7 +175,7 @@ make frontend # rebuild internal/report/static/css/app.css from Tailwind source
 make package # build the container image with podman (set DOCKER_ENGINE=docker to use Docker instead)
 ```
 
-CI (`.github/workflows/go.yml`) runs the build, install, lint and test targets plus an OCI image build on every push and pull request against `main`. Tagged releases (`.github/workflows/release.yml`) publish a GitHub Release with a generated changelog, cross-compiled binaries for linux/windows/darwin (amd64/arm64), and a multi-tagged image to `ghcr.io/genesary/security-hub`.
+CI (`.github/workflows/go.yml`) runs the build, install, lint and test targets plus an OCI image build on every push and pull request against `main`. Tagged releases (`.github/workflows/release.yml`) publish a GitHub Release with a generated changelog, cross-compiled binaries for linux/windows/darwin (amd64/arm64), and a multi-tagged image to `ghcr.io/boxboxjason/security-hub`.
 
 ## Roadmap
 

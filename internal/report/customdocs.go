@@ -3,7 +3,7 @@ package report
 import (
 	"fmt"
 
-	"github.com/genesary/security-hub/internal/customchecks"
+	"github.com/boxboxjason/security-hub/internal/customchecks"
 )
 
 // customCheckDocs returns hand-written documentation for security-hub's own

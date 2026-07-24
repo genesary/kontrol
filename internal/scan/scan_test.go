@@ -6,7 +6,7 @@ import (
 	"github.com/ossf/scorecard/v5/checker"
 	"github.com/ossf/scorecard/v5/pkg/scorecard"
 
-	"github.com/genesary/security-hub/internal/gitlabtree"
+	"github.com/boxboxjason/security-hub/internal/gitlabtree"
 )
 
 func TestWeightFor(t *testing.T) {

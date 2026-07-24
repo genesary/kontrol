@@ -16,7 +16,7 @@ import (
 	docChecks "github.com/ossf/scorecard/v5/docs/checks"
 	"go.uber.org/zap"
 
-	"github.com/genesary/security-hub/internal/gitlabtree"
+	"github.com/boxboxjason/security-hub/internal/gitlabtree"
 )
 
 //go:embed templates/report.html.tmpl

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/genesary/security-hub/internal/gitlabtree"
-	"github.com/genesary/security-hub/internal/report"
+	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/boxboxjason/security-hub/internal/report"
 )
 
 func TestRenderWritesValidReport(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/genesary/security-hub
+module github.com/boxboxjason/security-hub
 
 go 1.26.5
 

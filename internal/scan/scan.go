@@ -15,8 +15,8 @@ import (
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 	"go.uber.org/zap"
 
-	"github.com/genesary/security-hub/internal/customchecks"
-	"github.com/genesary/security-hub/internal/gitlabtree"
+	"github.com/boxboxjason/security-hub/internal/customchecks"
+	"github.com/boxboxjason/security-hub/internal/gitlabtree"
 )
 
 // Options configures how Scorecard analyzes each project.

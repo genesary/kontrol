@@ -6,7 +6,7 @@ import (
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/genesary/security-hub/internal/gitlabtree"
+	"github.com/boxboxjason/security-hub/internal/gitlabtree"
 )
 
 // reportArtifactLookback bounds how many of a project's most recent

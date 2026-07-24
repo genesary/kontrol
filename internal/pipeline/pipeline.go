@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/genesary/security-hub/internal/config"
-	"github.com/genesary/security-hub/internal/gitlabtree"
-	"github.com/genesary/security-hub/internal/report"
-	"github.com/genesary/security-hub/internal/scan"
+	"github.com/boxboxjason/security-hub/internal/config"
+	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/boxboxjason/security-hub/internal/report"
+	"github.com/boxboxjason/security-hub/internal/scan"
 )
 
 // unlimitedConcurrency is the errgroup.SetLimit value that removes any cap

@@ -2,7 +2,7 @@
 // self-hosted GitLab instance into a single HTML report.
 package main
 
-import "github.com/genesary/security-hub/cmd"
+import "github.com/boxboxjason/security-hub/cmd"
 
 func main() {
 	cmd.Execute()
