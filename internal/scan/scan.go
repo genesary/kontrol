@@ -86,21 +86,7 @@ func Project(ctx context.Context, opts Options, fullPath string) (*gitlabtree.Sc
 		checkScores[name] = nil
 	}
 
-	enabledCustomChecks := toSet(opts.CustomChecks)
-
-	if enabledCustomChecks[customchecks.CheckCodeQuality] && weightFor(customchecks.CheckCodeQuality, opts.Weights) != 0 {
-		runCustomCheck(checkScores, customchecks.CheckCodeQuality, weightFor(customchecks.CheckCodeQuality, opts.Weights), fullPath,
-			func() (*gitlabtree.ScoreStat, error) {
-				return customchecks.CodeQuality(ctx, opts.GitlabClient, fullPath)
-			})
-	}
-
-	if enabledCustomChecks[customchecks.CheckContributors] && weightFor(customchecks.CheckContributors, opts.Weights) != 0 {
-		runCustomCheck(checkScores, customchecks.CheckContributors, weightFor(customchecks.CheckContributors, opts.Weights), fullPath,
-			func() (*gitlabtree.ScoreStat, error) {
-				return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
-			})
-	}
+	runCustomChecks(ctx, opts, fullPath, checkScores)
 
 	overall, err := overallScoreFor(result, checkScores, opts.Weights)
 	if err != nil {
@@ -150,6 +136,47 @@ func overallScoreFor(
 	}
 
 	return &gitlabtree.ScoreStat{Average: combined.Average, Count: 1}, nil
+}
+
+// customCheckRunner pairs a security-hub-native check's name with the
+// closure that computes it, so runCustomChecks can dispatch every check
+// through one loop instead of one enabled/weight branch per check: that
+// branch count is what previously drove Project's cyclomatic complexity
+// over its lint threshold as checks were added.
+type customCheckRunner struct {
+	run  func() (*gitlabtree.ScoreStat, error)
+	name string
+}
+
+// runCustomChecks runs every enabled, non-zero-weight security-hub-native
+// check for a project and records its result in checkScores.
+func runCustomChecks(ctx context.Context, opts Options, fullPath string, checkScores map[string]*gitlabtree.ScoreStat) {
+	runners := []customCheckRunner{
+		{name: customchecks.CheckCodeQuality, run: func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.CodeQuality(ctx, opts.GitlabClient, fullPath)
+		}},
+		{name: customchecks.CheckContributors, run: func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
+		}},
+		{name: customchecks.CheckSAST, run: func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.SAST(ctx, opts.GitlabClient, fullPath)
+		}},
+	}
+
+	enabled := toSet(opts.CustomChecks)
+
+	for _, runner := range runners {
+		if !enabled[runner.name] {
+			continue
+		}
+
+		weight := weightFor(runner.name, opts.Weights)
+		if weight == 0 {
+			continue
+		}
+
+		runCustomCheck(checkScores, runner.name, weight, fullPath, runner.run)
+	}
 }
 
 // runCustomCheck computes a security-hub-native check and records its result
