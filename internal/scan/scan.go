@@ -205,6 +205,15 @@ func runCustomCheck(
 		return
 	}
 
+	// A nil, nil result is a legitimate "inconclusive" outcome (e.g. no
+	// pipelines to sample, no contributors), not an error: record it as
+	// N/A rather than dereferencing a nil stat.
+	if stat == nil {
+		checkScores[name] = nil
+
+		return
+	}
+
 	stat.Count = weight
 	checkScores[name] = stat
 }

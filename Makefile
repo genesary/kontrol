@@ -43,7 +43,7 @@ dependency-check:
 test: deps
 	@command -v gotestsum >/dev/null 2>&1 || { echo "Installing gotestsum..."; go install gotest.tools/gotestsum@v1.13.0; }
 	@mkdir -p codequality
-	gotestsum --junitfile codequality/unit-tests.xml --format-icons octicons -- -coverprofile=codequality/coverage.out -covermode=atomic ./...
+	CGO_ENABLED=1 gotestsum --junitfile codequality/unit-tests.xml --format-icons octicons -- -race -coverprofile=codequality/coverage.out -covermode=atomic ./...
 	@echo "Coverage report generated: codequality/coverage.html"
 
 

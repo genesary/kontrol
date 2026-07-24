@@ -1,6 +1,11 @@
 package gitlabtree
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
@@ -104,4 +109,118 @@ func TestFilterProjectsORsPatterns(t *testing.T) {
 			t.Fatal("filterProjects() error = nil, want non-nil for invalid regex")
 		}
 	})
+}
+
+func TestSortTreeOrdersSameKindSiblingsByName(t *testing.T) {
+	t.Parallel()
+
+	projects := []*gitlab.Project{
+		{Path: "zebra", PathWithNamespace: "zebra"},
+		{Path: "alpha", PathWithNamespace: "alpha"},
+		{Path: "app", PathWithNamespace: "team/app"},
+		{Path: "beta", PathWithNamespace: "team/beta"},
+	}
+
+	root := buildTree(projects)
+	sortTree(root)
+
+	if len(root.Children) != 3 {
+		t.Fatalf("root.Children = %d, want 3", len(root.Children))
+	}
+
+	// Groups sort before projects, and same-kind siblings sort by name:
+	// "team" (group) first, then the two top-level projects alphabetically.
+	if root.Children[0].Name != "team" {
+		t.Fatalf("root.Children[0].Name = %q, want %q (group before projects)", root.Children[0].Name, "team")
+	}
+
+	if root.Children[1].Name != "alpha" || root.Children[2].Name != "zebra" {
+		t.Fatalf("root.Children[1:] = [%q, %q], want same-kind siblings ordered [alpha, zebra]",
+			root.Children[1].Name, root.Children[2].Name)
+	}
+
+	team := root.Children[0]
+	if len(team.Children) != 2 || team.Children[0].Name != "app" || team.Children[1].Name != "beta" {
+		t.Fatalf("team.Children = %+v, want [app, beta] ordered by name", team.Children)
+	}
+}
+
+func TestDiscoverBuildsFilteredSortedTree(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/projects") {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Query().Get("page") {
+		case "", "1":
+			w.Header().Set("X-Next-Page", "2")
+			fmt.Fprint(w, `[{"path":"service","path_with_namespace":"team/backend/service"}]`)
+		default:
+			fmt.Fprint(w, `[{"path":"excluded","path_with_namespace":"other/excluded"}]`)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := gitlab.NewClient("test-token", gitlab.WithBaseURL(server.URL), gitlab.WithoutRetries())
+	if err != nil {
+		t.Fatalf("gitlab.NewClient() error = %v", err)
+	}
+
+	root, err := Discover(context.Background(), client, []string{"^team/"})
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	if len(root.Children) != 1 || root.Children[0].Name != "team" {
+		t.Fatalf("Discover() root.Children = %+v, want single filtered-in %q group", root.Children, "team")
+	}
+}
+
+func TestDiscoverListProjectsError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := gitlab.NewClient("test-token", gitlab.WithBaseURL(server.URL), gitlab.WithoutRetries())
+	if err != nil {
+		t.Fatalf("gitlab.NewClient() error = %v", err)
+	}
+
+	_, err = Discover(context.Background(), client, nil)
+	if err == nil {
+		t.Fatal("Discover() error = nil, want non-nil for API failure")
+	}
+
+	if !strings.Contains(err.Error(), "listing projects") {
+		t.Fatalf("Discover() error = %v, want it to mention %q", err, "listing projects")
+	}
+}
+
+func TestDiscoverInvalidFilterReturnsError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[]`)
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := gitlab.NewClient("test-token", gitlab.WithBaseURL(server.URL), gitlab.WithoutRetries())
+	if err != nil {
+		t.Fatalf("gitlab.NewClient() error = %v", err)
+	}
+
+	_, err = Discover(context.Background(), client, []string{"("})
+	if err == nil {
+		t.Fatal("Discover() error = nil, want non-nil for invalid filter regex")
+	}
 }

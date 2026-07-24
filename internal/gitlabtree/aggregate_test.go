@@ -129,3 +129,42 @@ func TestAggregateKeepsInconclusiveChecksVisible(t *testing.T) {
 		t.Fatalf(`root.Checks["Check"] missing, want key present with the "ok" project's real score`)
 	}
 }
+
+func TestAggregateNormalizesUnsetProjectCount(t *testing.T) {
+	t.Parallel()
+
+	// A freshly scanned project node has ProjectCount left at its zero
+	// value; Aggregate must normalize it to 1 rather than leaving a group
+	// of N real projects reporting a count of 0.
+	fresh := &gitlabtree.Node{
+		Kind:  gitlabtree.KindProject,
+		Name:  "fresh",
+		Score: &gitlabtree.ScoreStat{Average: 5, Count: 1},
+	}
+
+	gitlabtree.Aggregate(fresh)
+
+	if fresh.ProjectCount != 1 {
+		t.Fatalf("ProjectCount = %d, want 1 (normalized from zero value)", fresh.ProjectCount)
+	}
+}
+
+func TestAggregateGroupWithNoChecksHasNilChecks(t *testing.T) {
+	t.Parallel()
+
+	// Every child failed to scan (no Score, no Checks at all): combineChecks
+	// must not synthesize a Checks map out of nothing.
+	failedA := &gitlabtree.Node{Kind: gitlabtree.KindProject, Name: "a", ScanError: "boom"}
+	failedB := &gitlabtree.Node{Kind: gitlabtree.KindProject, Name: "b", ScanError: "boom"}
+	root := &gitlabtree.Node{
+		Kind:     gitlabtree.KindGroup,
+		Name:     "root",
+		Children: []*gitlabtree.Node{failedA, failedB},
+	}
+
+	gitlabtree.Aggregate(root)
+
+	if root.Checks != nil {
+		t.Fatalf("root.Checks = %+v, want nil when no child reported any check", root.Checks)
+	}
+}

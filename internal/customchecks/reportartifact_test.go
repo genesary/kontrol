@@ -1,6 +1,12 @@
 package customchecks
 
-import "testing"
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+)
 
 func TestScoreReportArtifact(t *testing.T) {
 	t.Parallel()
@@ -52,5 +58,76 @@ func TestScoreReportArtifact(t *testing.T) {
 					tc.pipelinesChecked, tc.pipelinesWithReport, got, tc.wantAverage)
 			}
 		})
+	}
+}
+
+func TestReportArtifactScoreEndToEnd(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/pipelines"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"id":1},{"id":2}]`)
+		case strings.HasSuffix(r.URL.Path, "/pipelines/1/jobs"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"id":10,"artifacts":[{"file_type":"sast"}]}]`)
+		case strings.HasSuffix(r.URL.Path, "/pipelines/2/jobs"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"id":11,"artifacts":[{"file_type":"codequality"}]}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	got, err := reportArtifactScore(context.Background(), client, "group/project", "sast")
+	if err != nil {
+		t.Fatalf("reportArtifactScore() error = %v", err)
+	}
+
+	const wantAverage = 5.0
+
+	if got == nil || got.Average != wantAverage || got.Count != 1 {
+		t.Fatalf("reportArtifactScore() = %+v, want {Average: %v, Count: 1}", got, wantAverage)
+	}
+}
+
+func TestReportArtifactScorePipelinesListError(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	})
+
+	_, err := reportArtifactScore(context.Background(), client, "group/project", "sast")
+	if err == nil {
+		t.Fatal("reportArtifactScore() error = nil, want non-nil for pipeline listing failure")
+	}
+
+	if !strings.Contains(err.Error(), "listing pipelines") {
+		t.Fatalf("reportArtifactScore() error = %v, want it to mention %q", err, "listing pipelines")
+	}
+}
+
+func TestReportArtifactScoreJobsListError(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/pipelines"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"id":1}]`)
+		default:
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}
+	})
+
+	_, err := reportArtifactScore(context.Background(), client, "group/project", "sast")
+	if err == nil {
+		t.Fatal("reportArtifactScore() error = nil, want non-nil for job listing failure")
+	}
+
+	if !strings.Contains(err.Error(), "listing jobs") {
+		t.Fatalf("reportArtifactScore() error = %v, want it to mention %q", err, "listing jobs")
 	}
 }
