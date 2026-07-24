@@ -55,5 +55,19 @@ func customCheckDocs() map[string]checkDoc {
 					"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
 			},
 		},
+		customchecks.CheckSecretDetection: {
+			Short: "Recent pipelines produce a Secret-Detection report",
+			Description: "Checks whether the project's most recent pipelines upload a report via " +
+				"artifacts.reports.secret_detection in .gitlab-ci.yml. security-hub-native, not a " +
+				"Scorecard check: Scorecard has no equivalent check on any platform.",
+			Remediation: []string{
+				"Add a job that runs a secret-scanning tool and uploads its report under " +
+					"artifacts.reports.secret_detection.",
+				"GitLab ships a ready-made Secret-Detection.gitlab-ci.yml template you can include as a " +
+					"fast path instead of writing the job by hand.",
+				"A partial (neither 0 nor 10) score means the job isn't running on every pipeline, check " +
+					"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
+			},
+		},
 	}
 }

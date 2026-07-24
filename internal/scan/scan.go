@@ -161,6 +161,9 @@ func runCustomChecks(ctx context.Context, opts Options, fullPath string, checkSc
 		{name: customchecks.CheckSAST, run: func() (*gitlabtree.ScoreStat, error) {
 			return customchecks.SAST(ctx, opts.GitlabClient, fullPath)
 		}},
+		{name: customchecks.CheckSecretDetection, run: func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.SecretDetection(ctx, opts.GitlabClient, fullPath)
+		}},
 	}
 
 	enabled := toSet(opts.CustomChecks)

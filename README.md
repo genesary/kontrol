@@ -54,6 +54,7 @@ Scorecard ships more checks than GitLab actually supports: several rely on GitHu
 | Code-Quality | 🧩 | security-hub-native, not a Scorecard check. Scores whether recent pipelines upload a `codequality`-type artifact. **Not a security/SAST check**, see the `SAST` row below |
 | Contributors | 🧩 | security-hub-native reimplementation (Scorecard's own registry still excludes GitLab). GitLab's API exposes no organization/company data, so this is a bus-factor/headcount proxy, not Scorecard's organizational-diversity measure |
 | SAST | 🧩 | security-hub-native reimplementation (Scorecard's own SAST check only recognizes GitHub's CodeQL/SonarCloud apps). Scores whether recent pipelines upload a `sast`-type artifact |
+| Secret-Detection | 🧩 | security-hub-native, not a Scorecard check (Scorecard has no equivalent on any platform). Scores whether recent pipelines upload a `secret_detection`-type artifact |
 | Dangerous-Workflow | ❌ | Analyzes GitHub Actions workflow syntax |
 | Packaging | ❌ | Looks for GitHub Packages publish workflows |
 | Signed-Releases | ❌ | Looks for GitHub release assets |
@@ -61,10 +62,10 @@ Scorecard ships more checks than GitLab actually supports: several rely on GitHu
 | Webhooks | ❌ | GitHub-only per Scorecard's own check registry, despite the GitLab client implementing `ListWebhooks` |
 | SBOM | ⚠️ | Runs on GitLab, but disabled by Scorecard unless `scorecard.experimental: true` (or `SECURITY_HUB_EXPERIMENTAL=true`) is set, see [Experimental checks](#experimental-checks) |
 
-Code-Quality, Contributors, and SAST are gated by the root-level `customScores` setting, not by `scorecard.checks`/`scorecard.offline` (they call the same internal GitLab API already required for discovery, so offline mode doesn't affect them either):
+Code-Quality, Contributors, SAST, and Secret-Detection are gated by the root-level `customScores` setting, not by `scorecard.checks`/`scorecard.offline` (they call the same internal GitLab API already required for discovery, so offline mode doesn't affect them either):
 
 ```yaml
-customScores: ["Code-Quality", "Contributors", "SAST"] # empty (the default) runs none of them
+customScores: ["Code-Quality", "Contributors", "SAST", "Secret-Detection"] # empty (the default) runs none of them
 ```
 
 Once enabled, each is shown as `N/A` only if the underlying GitLab API call itself fails for a given project.
@@ -113,7 +114,7 @@ gitlab:
   url: https://gitlab.example.com
   token: ${GITLAB_TOKEN}
   filters: [] # optional; regexes OR'd against each project's full path (namespace/project)
-customScores: [] # empty = no custom (🧩) checks; opt in by name, e.g. ["Code-Quality", "Contributors", "SAST"]
+customScores: [] # empty = no custom (🧩) checks; opt in by name, e.g. ["Code-Quality", "Contributors", "SAST", "Secret-Detection"]
 weights: {} # optional; check name -> integer weight, see below
 scorecard:
   checks: [] # empty = all checks
@@ -126,7 +127,7 @@ output:
 
 `gitlab.filters` restricts discovery to projects whose full path (e.g. `team/backend/service`) matches at least one of the given regular expressions; patterns are OR'd together, so a project is kept as soon as one matches. Leaving it empty (the default) scans every project the token can see. There is no env var override for it, since it's a list rather than a single value.
 
-`customScores` opts in to security-hub's own 🧩 checks (see [Supported checks](#supported-checks)) by name, currently `Code-Quality`, `Contributors`, and `SAST`. Unlike `scorecard.checks`, an empty list (the default) runs *none* of them rather than all of them: these checks make extra GitLab API calls per project, so they stay opt-in. There is no env var override for it either.
+`customScores` opts in to security-hub's own 🧩 checks (see [Supported checks](#supported-checks)) by name, currently `Code-Quality`, `Contributors`, `SAST`, and `Secret-Detection`. Unlike `scorecard.checks`, an empty list (the default) runs *none* of them rather than all of them: these checks make extra GitLab API calls per project, so they stay opt-in. There is no env var override for it either.
 
 `weights` maps a check name (any Scorecard check or one of the 🧩 custom checks) to an integer weight controlling how much it counts toward a project's overall score. A check with no entry defaults to weight `1`. A weight of `0` means the check is not run at all, whether it's a Scorecard check (as if left out of `scorecard.checks`) or a custom one (as if left out of `customScores`), so it's also omitted from the report entirely rather than shown as `N/A`. Leaving `weights` empty (the default) leaves the overall score exactly as Scorecard computes it today, via its own fixed risk-tier weighting, and custom checks stay excluded from that number. As soon as `weights` has at least one entry, security-hub switches to computing the overall score itself, as a weighted mean across every check that ran (Scorecard's and any enabled custom checks alike):
 
