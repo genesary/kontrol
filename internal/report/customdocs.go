@@ -1,6 +1,10 @@
 package report
 
-import "github.com/genesary/security-hub/internal/customchecks"
+import (
+	"fmt"
+
+	"github.com/genesary/security-hub/internal/customchecks"
+)
 
 // customCheckDocs returns hand-written documentation for security-hub's own
 // checks (internal/customchecks), which have no Scorecard-authored doc to
@@ -12,21 +16,15 @@ import "github.com/genesary/security-hub/internal/customchecks"
 // for these names.
 func customCheckDocs() map[string]checkDoc {
 	return map[string]checkDoc{
-		customchecks.CheckCodeQuality: {
-			Short: "Recent pipelines produce a Code Quality report",
-			Description: "Checks whether the project's most recent pipelines upload a Code Climate-format " +
-				"report via artifacts.reports.codequality in .gitlab-ci.yml. This is a linting/code-style " +
-				"signal, not a security scan, it is unrelated to SAST, secret detection, or dependency " +
-				"scanning.",
-			Remediation: []string{
-				"Add a job that runs a Code Quality analysis and uploads its report under " +
-					"artifacts.reports.codequality.",
-				"GitLab ships a ready-made Code-Quality.gitlab-ci.yml template you can include as a fast " +
-					"path instead of writing the job by hand.",
-				"A partial (neither 0 nor 10) score means the job isn't running on every pipeline, check " +
-					"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
-			},
-		},
+		customchecks.CheckCodeQuality: reportArtifactDoc(
+			"Recent pipelines produce a Code Quality report",
+			"Checks whether the project's most recent pipelines upload a Code Climate-format report via "+
+				"artifacts.reports.codequality in .gitlab-ci.yml. This is a linting/code-style signal, not "+
+				"a security scan, it is unrelated to SAST, secret detection, or dependency scanning.",
+			"runs a Code Quality analysis",
+			"codequality",
+			"Code-Quality",
+		),
 		customchecks.CheckContributors: {
 			Short: "Bus factor: distinct commit authors on the default branch",
 			Description: "Counts distinct commit authors on the project's default branch via GitLab's " +
@@ -40,34 +38,53 @@ func customCheckDocs() map[string]checkDoc {
 					"more, so spreading authorship and reviews across more people raises it.",
 			},
 		},
-		customchecks.CheckSAST: {
-			Short: "Recent pipelines produce a SAST report",
-			Description: "Checks whether the project's most recent pipelines upload a report via " +
-				"artifacts.reports.sast in .gitlab-ci.yml. This is a security-hub-native reimplementation: " +
-				"Scorecard's own SAST check only recognizes GitHub's CodeQL and SonarCloud apps, so it never " +
-				"finds a signal on GitLab.",
-			Remediation: []string{
-				"Add a job that runs a static analysis security testing scanner and uploads its report " +
-					"under artifacts.reports.sast.",
-				"GitLab ships a ready-made SAST.gitlab-ci.yml template you can include as a fast path " +
-					"instead of writing the job by hand.",
-				"A partial (neither 0 nor 10) score means the job isn't running on every pipeline, check " +
-					"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
-			},
-		},
-		customchecks.CheckSecretDetection: {
-			Short: "Recent pipelines produce a Secret-Detection report",
-			Description: "Checks whether the project's most recent pipelines upload a report via " +
-				"artifacts.reports.secret_detection in .gitlab-ci.yml. security-hub-native, not a " +
+		customchecks.CheckDependencyScanning: reportArtifactDoc(
+			"Recent pipelines produce a Dependency-Scanning report",
+			"Checks whether the project's most recent pipelines upload a report via "+
+				"artifacts.reports.dependency_scanning in .gitlab-ci.yml. security-hub-native, not a "+
+				"Scorecard check. This is about actively scanning dependencies for known vulnerabilities, "+
+				"distinct from Scorecard's own Vulnerabilities check (OSV.dev-based) and from having an "+
+				"SBOM (a dependency inventory, not a scan).",
+			"runs a dependency vulnerability scanner",
+			"dependency_scanning",
+			"Dependency-Scanning",
+		),
+		customchecks.CheckSAST: reportArtifactDoc(
+			"Recent pipelines produce a SAST report",
+			"Checks whether the project's most recent pipelines upload a report via artifacts.reports.sast "+
+				"in .gitlab-ci.yml. This is a security-hub-native reimplementation: Scorecard's own SAST "+
+				"check only recognizes GitHub's CodeQL and SonarCloud apps, so it never finds a signal on "+
+				"GitLab.",
+			"runs a static analysis security testing scanner",
+			"sast",
+			"SAST",
+		),
+		customchecks.CheckSecretDetection: reportArtifactDoc(
+			"Recent pipelines produce a Secret-Detection report",
+			"Checks whether the project's most recent pipelines upload a report via "+
+				"artifacts.reports.secret_detection in .gitlab-ci.yml. security-hub-native, not a "+
 				"Scorecard check: Scorecard has no equivalent check on any platform.",
-			Remediation: []string{
-				"Add a job that runs a secret-scanning tool and uploads its report under " +
-					"artifacts.reports.secret_detection.",
-				"GitLab ships a ready-made Secret-Detection.gitlab-ci.yml template you can include as a " +
-					"fast path instead of writing the job by hand.",
-				"A partial (neither 0 nor 10) score means the job isn't running on every pipeline, check " +
-					"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
-			},
+			"runs a secret-scanning tool",
+			"secret_detection",
+			"Secret-Detection",
+		),
+	}
+}
+
+// reportArtifactDoc builds the doc entry shared by every check built on
+// customchecks' report-artifact pattern: they only differ in what the job
+// does, which report artifact type it uploads, and which GitLab-provided
+// CI template implements it.
+func reportArtifactDoc(short, description, jobDescription, artifactType, templateName string) checkDoc {
+	return checkDoc{
+		Short:       short,
+		Description: description,
+		Remediation: []string{
+			fmt.Sprintf("Add a job that %s and uploads its report under artifacts.reports.%s.", jobDescription, artifactType),
+			fmt.Sprintf("GitLab ships a ready-made %s.gitlab-ci.yml template you can include as a fast "+
+				"path instead of writing the job by hand.", templateName),
+			"A partial (neither 0 nor 10) score means the job isn't running on every pipeline, check " +
+				"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
 		},
 	}
 }

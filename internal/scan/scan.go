@@ -158,6 +158,9 @@ func runCustomChecks(ctx context.Context, opts Options, fullPath string, checkSc
 		{name: customchecks.CheckContributors, run: func() (*gitlabtree.ScoreStat, error) {
 			return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
 		}},
+		{name: customchecks.CheckDependencyScanning, run: func() (*gitlabtree.ScoreStat, error) {
+			return customchecks.DependencyScanning(ctx, opts.GitlabClient, fullPath)
+		}},
 		{name: customchecks.CheckSAST, run: func() (*gitlabtree.ScoreStat, error) {
 			return customchecks.SAST(ctx, opts.GitlabClient, fullPath)
 		}},
