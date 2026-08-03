@@ -149,39 +149,79 @@ type customCheckRunner struct {
 }
 
 // runCustomChecks runs every enabled, non-zero-weight security-hub-native
-// check for a project and records its result in checkScores.
+// check for a project and records its result in checkScores. The
+// report-artifact checks are scored as one batch rather than one at a time,
+// since they all read the same pipelines and jobs.
 func runCustomChecks(ctx context.Context, opts Options, fullPath string, checkScores map[string]*gitlabtree.ScoreStat) {
+	requested := requestedCustomChecks(opts)
+
+	runReportArtifactChecks(ctx, opts, fullPath, requested, checkScores)
+
 	runners := []customCheckRunner{
-		{name: customchecks.CheckCodeQuality, run: func() (*gitlabtree.ScoreStat, error) {
-			return customchecks.CodeQuality(ctx, opts.GitlabClient, fullPath)
-		}},
 		{name: customchecks.CheckContributors, run: func() (*gitlabtree.ScoreStat, error) {
 			return customchecks.Contributors(ctx, opts.GitlabClient, fullPath)
 		}},
-		{name: customchecks.CheckDependencyScanning, run: func() (*gitlabtree.ScoreStat, error) {
-			return customchecks.DependencyScanning(ctx, opts.GitlabClient, fullPath)
-		}},
-		{name: customchecks.CheckSAST, run: func() (*gitlabtree.ScoreStat, error) {
-			return customchecks.SAST(ctx, opts.GitlabClient, fullPath)
-		}},
-		{name: customchecks.CheckSecretDetection, run: func() (*gitlabtree.ScoreStat, error) {
-			return customchecks.SecretDetection(ctx, opts.GitlabClient, fullPath)
-		}},
 	}
 
-	enabled := toSet(opts.CustomChecks)
-
 	for _, runner := range runners {
-		if !enabled[runner.name] {
-			continue
+		if weight, ok := requested[runner.name]; ok {
+			runCustomCheck(checkScores, runner.name, weight, fullPath, runner.run)
+		}
+	}
+}
+
+// requestedCustomChecks maps every enabled custom check to its configured
+// weight, dropping the zero-weight ones: a weight of 0 skips the check
+// entirely rather than merely excluding it from the average, so it never
+// appears in the report at all, not even as "N/A".
+func requestedCustomChecks(opts Options) map[string]int {
+	requested := make(map[string]int, len(opts.CustomChecks))
+
+	for _, name := range opts.CustomChecks {
+		weight := weightFor(name, opts.Weights)
+		if weight != 0 {
+			requested[name] = weight
+		}
+	}
+
+	return requested
+}
+
+// runReportArtifactChecks scores every requested report-artifact check in a
+// single pass over the project's recent pipelines. Batching them is what
+// keeps the cost at one pipeline listing per project instead of one per
+// check: they read the same jobs and differ only in which artifact file type
+// they look for. As with runCustomCheck, a failure is logged and recorded as
+// N/A rather than aborting the project's scan, here for every check in the
+// batch since they share the fetch that failed.
+func runReportArtifactChecks(
+	ctx context.Context, opts Options, fullPath string, requested map[string]int, checkScores map[string]*gitlabtree.ScoreStat,
+) {
+	names := make([]string, 0, len(requested))
+
+	for name := range requested {
+		if customchecks.IsReportArtifactCheck(name) {
+			names = append(names, name)
+		}
+	}
+
+	if len(names) == 0 {
+		return
+	}
+
+	scores, err := customchecks.ReportArtifactScores(ctx, opts.GitlabClient, fullPath, names)
+	if err != nil {
+		for _, name := range names {
+			warnCustomCheckFailed(name, fullPath, err)
+
+			checkScores[name] = nil
 		}
 
-		weight := weightFor(runner.name, opts.Weights)
-		if weight == 0 {
-			continue
-		}
+		return
+	}
 
-		runCustomCheck(checkScores, runner.name, weight, fullPath, runner.run)
+	for _, name := range names {
+		recordCustomCheckScore(checkScores, name, requested[name], scores[name])
 	}
 }
 
@@ -194,20 +234,21 @@ func runCustomCheck(
 ) {
 	stat, err := run()
 	if err != nil {
-		zap.L().Warn("Custom check failed",
-			zap.String("check", name),
-			zap.String("project", fullPath),
-			zap.Error(err),
-		)
+		warnCustomCheckFailed(name, fullPath, err)
 
 		checkScores[name] = nil
 
 		return
 	}
 
-	// A nil, nil result is a legitimate "inconclusive" outcome (e.g. no
-	// pipelines to sample, no contributors), not an error: record it as
-	// N/A rather than dereferencing a nil stat.
+	recordCustomCheckScore(checkScores, name, weight, stat)
+}
+
+// recordCustomCheckScore records stat under name, rescaled to weight. A nil
+// stat is a legitimate "inconclusive" outcome (e.g. no pipelines to sample,
+// no contributors), not an error: it is recorded as N/A rather than
+// dereferenced.
+func recordCustomCheckScore(checkScores map[string]*gitlabtree.ScoreStat, name string, weight int, stat *gitlabtree.ScoreStat) {
 	if stat == nil {
 		checkScores[name] = nil
 
@@ -218,16 +259,12 @@ func runCustomCheck(
 	checkScores[name] = stat
 }
 
-// toSet converts a name list into a membership set, so callers can check
-// "is this name requested" in constant time regardless of list length.
-func toSet(names []string) map[string]bool {
-	set := make(map[string]bool, len(names))
-
-	for _, name := range names {
-		set[name] = true
-	}
-
-	return set
+func warnCustomCheckFailed(name, fullPath string, err error) {
+	zap.L().Warn("Custom check failed",
+		zap.String("check", name),
+		zap.String("project", fullPath),
+		zap.Error(err),
+	)
 }
 
 // resolveChecks expands Options into the explicit list of check names

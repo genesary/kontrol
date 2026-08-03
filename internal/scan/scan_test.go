@@ -206,17 +206,30 @@ func TestIsOfflineUnsafe(t *testing.T) {
 	}
 }
 
-func TestToSet(t *testing.T) {
+func TestRequestedCustomChecks(t *testing.T) {
 	t.Parallel()
 
-	set := toSet([]string{"a", "b", "a"})
-
-	if len(set) != 2 || !set["a"] || !set["b"] {
-		t.Errorf("toSet() = %v, want {a: true, b: true}", set)
+	opts := Options{
+		CustomChecks: []string{customchecks.CheckSAST, customchecks.CheckContributors, customchecks.CheckCodeQuality},
+		Weights:      map[string]int{customchecks.CheckSAST: 3, customchecks.CheckCodeQuality: 0},
 	}
 
-	if empty := toSet(nil); len(empty) != 0 {
-		t.Errorf("toSet(nil) = %v, want empty", empty)
+	requested := requestedCustomChecks(opts)
+
+	if got, ok := requested[customchecks.CheckSAST]; !ok || got != 3 {
+		t.Errorf("requestedCustomChecks()[SAST] = %d (present=%v), want 3", got, ok)
+	}
+
+	if got, ok := requested[customchecks.CheckContributors]; !ok || got != defaultWeight {
+		t.Errorf("requestedCustomChecks()[Contributors] = %d (present=%v), want default %d", got, ok, defaultWeight)
+	}
+
+	if _, ok := requested[customchecks.CheckCodeQuality]; ok {
+		t.Errorf("requestedCustomChecks()[Code-Quality] present, want absent (weight 0 skips the check entirely)")
+	}
+
+	if empty := requestedCustomChecks(Options{}); len(empty) != 0 {
+		t.Errorf("requestedCustomChecks() with no custom checks = %v, want empty", empty)
 	}
 }
 

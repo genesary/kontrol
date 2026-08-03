@@ -23,13 +23,53 @@ const reportArtifactLookback = 5
 // score the project as if it ran no scanner at all.
 const jobsPageSize = 100
 
-// reportArtifactScore reports whether a project's recent pipelines produce
-// a job artifact of the given GitLab report file_type (e.g. "codequality",
-// "sast", "secret_detection", "dependency_scanning"), on a 0-10 scale over
-// the fraction of the last reportArtifactLookback pipelines that did. It is
-// the shared implementation behind every security-hub-native check built on
-// this pattern; each check only differs in which file_type it looks for.
-func reportArtifactScore(ctx context.Context, client *gitlab.Client, projectPath, fileType string) (*gitlabtree.ScoreStat, error) {
+// reportArtifactFileTypes maps each security-hub-native check built on the
+// report-artifact pattern to the GitLab report file_type it looks for. These
+// checks are identical apart from that file type, which is what lets them all
+// be answered from a single pass over a project's pipelines.
+func reportArtifactFileTypes() map[string]string {
+	return map[string]string{
+		CheckCodeQuality:        codeQualityFileType,
+		CheckDependencyScanning: dependencyScanningFileType,
+		CheckSAST:               sastFileType,
+		CheckSecretDetection:    secretDetectionFileType,
+	}
+}
+
+// IsReportArtifactCheck reports whether name is one of the checks built on
+// the report-artifact pattern, so callers can batch them together instead of
+// running them one at a time.
+func IsReportArtifactCheck(name string) bool {
+	_, ok := reportArtifactFileTypes()[name]
+
+	return ok
+}
+
+// ReportArtifactScores scores every named report-artifact check on a 0-10
+// scale over the fraction of the project's last reportArtifactLookback
+// pipelines that produced the check's report artifact. Every requested check
+// is answered from one pass over those pipelines: they all read the same jobs
+// and differ only in which artifact file type they look for, so scoring them
+// together costs one pipeline listing per project instead of one per check.
+// Names that aren't report-artifact checks are ignored.
+func ReportArtifactScores(
+	ctx context.Context, client *gitlab.Client, projectPath string, names []string,
+) (map[string]*gitlabtree.ScoreStat, error) {
+	// Inverted (file type -> check name) so each artifact seen below costs a
+	// single map lookup rather than a scan of every requested check.
+	checkByFileType := make(map[string]string, len(names))
+	fileTypes := reportArtifactFileTypes()
+
+	for _, name := range names {
+		if fileType, ok := fileTypes[name]; ok {
+			checkByFileType[fileType] = name
+		}
+	}
+
+	if len(checkByFileType) == 0 {
+		return map[string]*gitlabtree.ScoreStat{}, nil
+	}
+
 	pipelines, _, err := client.Pipelines.ListProjectPipelines(projectPath, &gitlab.ListProjectPipelinesOptions{
 		ListOptions: gitlab.ListOptions{PerPage: reportArtifactLookback},
 		OrderBy:     new("id"),
@@ -39,20 +79,25 @@ func reportArtifactScore(ctx context.Context, client *gitlab.Client, projectPath
 		return nil, fmt.Errorf("listing pipelines for %q: %w", projectPath, err)
 	}
 
-	var withReport int
+	withReport := make(map[string]int, len(checkByFileType))
 
 	for _, pipeline := range pipelines {
-		has, err := pipelineHasReportArtifact(ctx, client, projectPath, pipeline.ID, fileType)
+		found, err := pipelineReportArtifacts(ctx, client, projectPath, pipeline.ID, checkByFileType)
 		if err != nil {
 			return nil, err
 		}
 
-		if has {
-			withReport++
+		for name := range found {
+			withReport[name]++
 		}
 	}
 
-	return scoreReportArtifact(len(pipelines), withReport), nil
+	scores := make(map[string]*gitlabtree.ScoreStat, len(checkByFileType))
+	for _, name := range checkByFileType {
+		scores[name] = scoreReportArtifact(len(pipelines), withReport[name])
+	}
+
+	return scores, nil
 }
 
 // scoreReportArtifact is the pure scoring policy shared by every
@@ -67,10 +112,14 @@ func scoreReportArtifact(pipelinesChecked, pipelinesWithReport int) *gitlabtree.
 	return &gitlabtree.ScoreStat{Average: proportional(pipelinesWithReport, pipelinesChecked), Count: 1}
 }
 
-// pipelineHasReportArtifact reports whether any job in the given pipeline
-// produced a job artifact of the given file_type, walking every page of the
-// pipeline's jobs rather than only the first.
-func pipelineHasReportArtifact(ctx context.Context, client *gitlab.Client, projectPath string, pipelineID int64, fileType string) (bool, error) {
+// pipelineReportArtifacts returns the set of checks (by name) whose report
+// file_type was produced by at least one job in the given pipeline, walking
+// every page of the pipeline's jobs rather than only the first.
+func pipelineReportArtifacts(
+	ctx context.Context, client *gitlab.Client, projectPath string, pipelineID int64, checkByFileType map[string]string,
+) (map[string]bool, error) {
+	found := make(map[string]bool, len(checkByFileType))
+
 	opts := &gitlab.ListJobsOptions{
 		ListOptions: gitlab.ListOptions{PerPage: jobsPageSize, Page: 1},
 	}
@@ -78,19 +127,21 @@ func pipelineHasReportArtifact(ctx context.Context, client *gitlab.Client, proje
 	for {
 		jobs, resp, err := client.Jobs.ListPipelineJobs(projectPath, pipelineID, opts, gitlab.WithContext(ctx))
 		if err != nil {
-			return false, fmt.Errorf("listing jobs for pipeline %d of %q: %w", pipelineID, projectPath, err)
+			return nil, fmt.Errorf("listing jobs for pipeline %d of %q: %w", pipelineID, projectPath, err)
 		}
 
 		for _, job := range jobs {
 			for _, artifact := range job.Artifacts {
-				if artifact.FileType == fileType {
-					return true, nil
+				if name, ok := checkByFileType[artifact.FileType]; ok {
+					found[name] = true
 				}
 			}
 		}
 
-		if resp.NextPage == 0 {
-			return false, nil
+		// Nothing left to learn from this pipeline once every requested check
+		// has been seen, so stop paging early.
+		if len(found) == len(checkByFileType) || resp.NextPage == 0 {
+			return found, nil
 		}
 
 		opts.Page = resp.NextPage
