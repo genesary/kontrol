@@ -73,6 +73,7 @@ func TestRenderWritesValidReport(t *testing.T) {
 	for _, asset := range []string{
 		filepath.Join("static", "css", "app.css"),
 		filepath.Join("static", "js", "report.js"),
+		filepath.Join("static", "js", "print.js"),
 		filepath.Join("static", "js", "export.js"),
 	} {
 		if _, err := os.Stat(filepath.Join(outputDir, asset)); err != nil {

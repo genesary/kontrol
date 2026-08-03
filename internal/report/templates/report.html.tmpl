@@ -3,34 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>security-hub report</title>
+<meta name="report:generated" content="{{.GeneratedAt}}">
+<meta name="report:instance" content="{{.GitlabURL}}">
+<title>Security posture report</title>
 <link rel="stylesheet" href="static/css/app.css">
 </head>
 <body>
-<header class="border-b border-border px-8 py-6">
-  <div class="flex flex-wrap items-start justify-between gap-4">
+<a class="skip-link" href="#report">Skip to report</a>
+<header class="masthead">
+  <div class="masthead-inner">
     <div>
-      <h1 class="m-0 text-xl font-bold">security-hub report</h1>
-      <p class="m-0 mt-1 text-sm text-muted">
-        {{with .GitlabURL}}<a class="web-link" href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a> &middot; {{end}}
+      <p class="eyebrow">OpenSSF Scorecard &middot; GitLab instance</p>
+      <h1 class="masthead-title">Security posture report</h1>
+      <p class="masthead-meta">
+        {{with .GitlabURL}}<a class="link" href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a><span class="sep">&middot;</span>{{end}}
         Generated {{.GeneratedAt}}
       </p>
     </div>
-    <div class="flex gap-2 print:hidden">
-      <button id="export-csv" type="button" class="btn">Export CSV</button>
-      <button id="export-pdf" type="button" class="btn">Export PDF</button>
+    <div class="masthead-actions">
+      <button id="export-csv" type="button" class="btn" title="Download every group and project as a spreadsheet">Export CSV</button>
+      <button id="export-pdf" type="button" class="btn btn-primary" title="Opens your browser's print dialog, where you can save as PDF">Export PDF</button>
     </div>
   </div>
 </header>
-<main class="mx-auto max-w-4xl px-8 pb-12 pt-6">
-  <nav class="breadcrumb mb-4 text-sm text-muted" id="breadcrumb"></nav>
-  <div class="mb-6 flex flex-wrap gap-4" id="summary"></div>
+<main id="report" class="page">
+  <nav class="crumbs" id="breadcrumb" aria-label="Report location"></nav>
+  <div id="summary"></div>
   <div id="scan-error"></div>
   <div id="children"></div>
 </main>
+<div id="print-doc" class="print-doc" aria-hidden="true"></div>
 <script id="report-data" type="application/json">{{.DataJSON}}</script>
 <script id="check-docs-data" type="application/json">{{.CheckDocsJSON}}</script>
 <script src="static/js/report.js"></script>
+<script src="static/js/print.js"></script>
 <script src="static/js/export.js"></script>
 </body>
 </html>

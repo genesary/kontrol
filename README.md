@@ -25,7 +25,7 @@ Instance (avg per check + overall)
 1. **Discover**: list every project visible to the configured token via the GitLab API. Groups and subgroups are never fetched directly: they're inferred from each project's namespaced path (`team/backend/service` implies groups `team` and `team/backend`).
 2. **Analyze**: run Scorecard against each project's repository, collecting a score per check (`Branch-Protection`, `Code-Review`, `Vulnerabilities`, etc.) plus Scorecard's own aggregate score. Scorecard is used as a Go library ([`github.com/ossf/scorecard`](https://github.com/ossf/scorecard)), not shelled out to.
 3. **Aggregate**: average check scores bottom-up through the group tree (project → subgroup → group → instance).
-4. **Render**: emit a single self-contained HTML report with a drill-down view: instance summary first, group → subgroup → project navigation, each level showing its own aggregated scores. The report can also export the full tree as CSV or be printed to PDF straight from the browser.
+4. **Render**: emit a single self-contained HTML report with a drill-down view: instance summary first, group → subgroup → project navigation, each level showing its own aggregated scores. The report can also export the full tree as CSV, or print a paginated PDF dossier of the whole instance straight from the browser.
 
 ### Offline mode
 
@@ -157,7 +157,7 @@ There is no env var override for it, since it's a map rather than a single value
 security-hub scan --config config.yaml
 ```
 
-This discovers, scans and renders in one pass, writing a self-contained report directory (`index.html` plus its `static/` assets) to `output.path`. From the report, **Export CSV** downloads the full tree (every group/subgroup/project, per-check scores) as a spreadsheet-ready CSV, and **Export PDF** opens the browser's print dialog with a PDF-friendly layout of the currently viewed page.
+This discovers, scans and renders in one pass, writing a self-contained report directory (`index.html` plus its `static/` assets) to `output.path`. From the report, **Export CSV** downloads the full tree (every group/subgroup/project, per-check scores) as a spreadsheet-ready CSV, and **Export PDF** opens the browser's print dialog on a paginated dossier of the whole instance: cover page, executive summary, posture per check, group rollup, a per-project check matrix and any projects that could not be analyzed. The printed document always covers the entire instance, whichever group or project the reader has drilled into on screen.
 
 The report's styling is built with [Tailwind CSS](https://tailwindcss.com/) from `internal/report/tailwind/input.css`. The compiled `internal/report/static/css/app.css` is committed, so a plain `go build` never needs Tailwind; only run `make frontend` if you edit the report's styles (it downloads the standalone Tailwind CLI into `./bin` on first use, no Node/npm required).
 
