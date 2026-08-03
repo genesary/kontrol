@@ -195,6 +195,78 @@ func TestDiscoverBuildsFilteredSortedTree(t *testing.T) {
 	}
 }
 
+// TestDiscoverAccumulatesEveryProjectPage asserts projects from every page
+// end up in the tree. TestDiscoverBuildsFilteredSortedTree proves a second
+// page is requested, but its project is filtered out again, so nothing there
+// would notice listAllProjects dropping everything but the last page it
+// fetched.
+func TestDiscoverAccumulatesEveryProjectPage(t *testing.T) {
+	t.Parallel()
+
+	var pagesServed []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/projects") {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		page := r.URL.Query().Get("page")
+		pagesServed = append(pagesServed, page)
+
+		w.Header().Set("Content-Type", "application/json")
+
+		switch page {
+		case "", "1":
+			w.Header().Set("X-Next-Page", "2")
+			fmt.Fprint(w, `[{"path":"one","path_with_namespace":"team/one"}]`)
+		case "2":
+			w.Header().Set("X-Next-Page", "3")
+			fmt.Fprint(w, `[{"path":"two","path_with_namespace":"team/two"}]`)
+		default:
+			fmt.Fprint(w, `[{"path":"three","path_with_namespace":"team/three"}]`)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := gitlab.NewClient("test-token", gitlab.WithBaseURL(server.URL), gitlab.WithoutRetries())
+	if err != nil {
+		t.Fatalf("gitlab.NewClient() error = %v", err)
+	}
+
+	root, err := Discover(context.Background(), client, nil)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	if len(pagesServed) != 3 {
+		t.Fatalf("served pages %v, want 3 (paging must continue until X-Next-Page is empty)", pagesServed)
+	}
+
+	if len(root.Children) != 1 || root.Children[0].Name != "team" {
+		t.Fatalf("root.Children = %+v, want the single inferred %q group", root.Children, "team")
+	}
+
+	team := root.Children[0]
+
+	got := make([]string, 0, len(team.Children))
+	for _, child := range team.Children {
+		got = append(got, child.FullPath)
+	}
+
+	want := []string{"team/one", "team/three", "team/two"}
+	if len(got) != len(want) {
+		t.Fatalf("team.Children = %v, want every page's project: %v", got, want)
+	}
+
+	for i, path := range want {
+		if got[i] != path {
+			t.Fatalf("team.Children = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestDiscoverListProjectsError(t *testing.T) {
 	t.Parallel()
 

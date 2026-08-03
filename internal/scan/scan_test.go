@@ -273,6 +273,68 @@ func TestResolveChecksOfflineSplitsUnsafeChecks(t *testing.T) {
 	}
 }
 
+// TestOfflineSkippedChecksRenderAsNA covers the wiring inside Project that
+// ties resolveChecks's offline split back to the report. A check dropped
+// because it needs internet access never reaches Scorecard and so never
+// appears in its result; it must still be present as a key with a nil (N/A)
+// value, since a missing key is indistinguishable from a check that was
+// never requested at all. Every other layer (aggregate, report) has its own
+// test for that contract, but the step that seeds it did not.
+func TestOfflineSkippedChecksRenderAsNA(t *testing.T) {
+	t.Parallel()
+
+	opts := Options{
+		Checks:  []string{checks.CheckVulnerabilities, checks.CheckFuzzing, "Maintained"},
+		Offline: true,
+	}
+
+	toRun, skippedOffline := resolveChecks(opts)
+
+	// Stand in for scorecard.Run: only the checks that survived the offline
+	// split come back with a result.
+	results := make([]checker.CheckResult, 0, len(toRun))
+	for _, name := range toRun {
+		results = append(results, checker.CheckResult{Name: name, Score: 8})
+	}
+
+	checkScores := toScoreStats(scorecard.Result{Checks: results}, opts.Weights)
+	markSkippedOffline(checkScores, skippedOffline)
+
+	for _, name := range []string{checks.CheckVulnerabilities, checks.CheckFuzzing} {
+		stat, ok := checkScores[name]
+		if !ok {
+			t.Errorf("checkScores[%s] missing entirely, want key present with a nil (N/A) value", name)
+		}
+
+		if stat != nil {
+			t.Errorf("checkScores[%s] = %+v, want nil (skipped offline)", name, stat)
+		}
+	}
+
+	if stat := checkScores["Maintained"]; stat == nil || stat.Average != 8 {
+		t.Errorf("checkScores[Maintained] = %+v, want Average=8 (it ran normally)", stat)
+	}
+}
+
+// TestMarkSkippedOfflineDoesNotClobberRealScores guards the merge order: the
+// offline names are written on top of Scorecard's results, so a name that
+// somehow appears in both must not lose a real score to a nil.
+func TestMarkSkippedOfflineDoesNotClobberRealScores(t *testing.T) {
+	t.Parallel()
+
+	checkScores := map[string]*gitlabtree.ScoreStat{"Maintained": {Average: 8, Count: 1}}
+
+	markSkippedOffline(checkScores, nil)
+
+	if stat := checkScores["Maintained"]; stat == nil || stat.Average != 8 {
+		t.Errorf("checkScores[Maintained] = %+v, want it untouched with nothing skipped", stat)
+	}
+
+	if len(checkScores) != 1 {
+		t.Errorf("checkScores = %+v, want no keys invented for an empty skip list", checkScores)
+	}
+}
+
 func TestOverallScoreForUnweightedInconclusive(t *testing.T) {
 	t.Parallel()
 

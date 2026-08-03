@@ -80,13 +80,7 @@ func Project(
 	}
 
 	checkScores := toScoreStats(result, opts.Weights)
-
-	// Checks skipped by our own offline filter never reach Scorecard, so they
-	// never appear in result.Checks. Add them as nil (rendered as "N/A") so
-	// they're still visible in the report instead of silently vanishing.
-	for _, name := range skippedOffline {
-		checkScores[name] = nil
-	}
+	markSkippedOffline(checkScores, skippedOffline)
 
 	runCustomChecks(ctx, opts, fullPath, defaultBranch, checkScores)
 
@@ -96,6 +90,17 @@ func Project(
 	}
 
 	return overall, checkScores, nil
+}
+
+// markSkippedOffline records every check dropped by our own offline filter
+// as nil (rendered as "N/A"). Those checks never reach Scorecard, so they
+// never appear in its result: without this they would silently vanish from
+// the report, which a reader can't tell apart from a check that was never
+// requested at all.
+func markSkippedOffline(checkScores map[string]*gitlabtree.ScoreStat, skippedOffline []string) {
+	for _, name := range skippedOffline {
+		checkScores[name] = nil
+	}
 }
 
 // overallScoreFor computes a project's overall score. With no weights
