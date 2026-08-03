@@ -10,10 +10,9 @@ import (
 )
 
 // reportArtifactLookback bounds how many of a project's most recent
-// pipelines (across all refs) are sampled for a given report artifact
-// type. Recent pipelines rather than just the latest one, so the score
-// reflects whether a scanner runs consistently rather than the luck of a
-// single pipeline.
+// pipelines are sampled for a given report artifact type. Recent pipelines
+// rather than just the latest one, so the score reflects whether a scanner
+// runs consistently rather than the luck of a single pipeline.
 const reportArtifactLookback = 5
 
 // jobsPageSize is how many of a pipeline's jobs are fetched per request.
@@ -47,13 +46,15 @@ func IsReportArtifactCheck(name string) bool {
 
 // ReportArtifactScores scores every named report-artifact check on a 0-10
 // scale over the fraction of the project's last reportArtifactLookback
-// pipelines that produced the check's report artifact. Every requested check
-// is answered from one pass over those pipelines: they all read the same jobs
-// and differ only in which artifact file type they look for, so scoring them
-// together costs one pipeline listing per project instead of one per check.
-// Names that aren't report-artifact checks are ignored.
+// successful default-branch pipelines that produced the check's report
+// artifact (see sampledPipelines for why the sample is scoped that way).
+// Every requested check is answered from one pass over those pipelines: they
+// all read the same jobs and differ only in which artifact file type they
+// look for, so scoring them together costs one pipeline listing per project
+// instead of one per check. Names that aren't report-artifact checks are
+// ignored.
 func ReportArtifactScores(
-	ctx context.Context, client *gitlab.Client, projectPath string, names []string,
+	ctx context.Context, client *gitlab.Client, projectPath, defaultBranch string, names []string,
 ) (map[string]*gitlabtree.ScoreStat, error) {
 	// Inverted (file type -> check name) so each artifact seen below costs a
 	// single map lookup rather than a scan of every requested check.
@@ -70,13 +71,9 @@ func ReportArtifactScores(
 		return map[string]*gitlabtree.ScoreStat{}, nil
 	}
 
-	pipelines, _, err := client.Pipelines.ListProjectPipelines(projectPath, &gitlab.ListProjectPipelinesOptions{
-		ListOptions: gitlab.ListOptions{PerPage: reportArtifactLookback},
-		OrderBy:     new("id"),
-		Sort:        new("desc"),
-	}, gitlab.WithContext(ctx))
+	pipelines, err := sampledPipelines(ctx, client, projectPath, defaultBranch)
 	if err != nil {
-		return nil, fmt.Errorf("listing pipelines for %q: %w", projectPath, err)
+		return nil, err
 	}
 
 	withReport := make(map[string]int, len(checkByFileType))
@@ -98,6 +95,42 @@ func ReportArtifactScores(
 	}
 
 	return scores, nil
+}
+
+// sampledPipelines returns the pipelines a report-artifact check scores
+// over: the most recent successful ones on the project's default branch.
+//
+// Both filters exist to keep the score answering "does this project run the
+// scanner" rather than "what happened to run last". Without the status
+// filter, a pipeline that is still running, or was canceled or skipped, has
+// no finished artifacts and would count against the project purely for
+// existing. Without the ref filter, a burst of feature-branch or merge
+// request pipelines that skip scanners would sink a project whose default
+// branch runs them on every commit.
+//
+// A project whose default branch is unknown (no commits yet) falls back to
+// sampling every ref; one with no successful pipelines at all yields an
+// empty sample, which scores as inconclusive (N/A) rather than zero.
+func sampledPipelines(
+	ctx context.Context, client *gitlab.Client, projectPath, defaultBranch string,
+) ([]*gitlab.PipelineInfo, error) {
+	opts := &gitlab.ListProjectPipelinesOptions{
+		ListOptions: gitlab.ListOptions{PerPage: reportArtifactLookback},
+		OrderBy:     new("id"),
+		Sort:        new("desc"),
+		Status:      new(gitlab.Success),
+	}
+
+	if defaultBranch != "" {
+		opts.Ref = new(defaultBranch)
+	}
+
+	pipelines, _, err := client.Pipelines.ListProjectPipelines(projectPath, opts, gitlab.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("listing pipelines for %q: %w", projectPath, err)
+	}
+
+	return pipelines, nil
 }
 
 // scoreReportArtifact is the pure scoring policy shared by every

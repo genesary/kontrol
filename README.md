@@ -51,11 +51,11 @@ Scorecard ships more checks than GitLab actually supports: several rely on GitHu
 | Pinned-Dependencies | ✅ | |
 | Security-Policy | ✅ | |
 | Vulnerabilities | ✅ | Requires internet access (OSV.dev), shown `N/A` when `scorecard.offline: true` |
-| Code-Quality | 🧩 | security-hub-native, not a Scorecard check. Scores whether recent pipelines upload a `codequality`-type artifact. **Not a security/SAST check**, see the `SAST` row below |
+| Code-Quality | 🧩 | security-hub-native, not a Scorecard check. Scores whether recent successful default-branch pipelines upload a `codequality`-type artifact. **Not a security/SAST check**, see the `SAST` row below |
 | Contributors | 🧩 | security-hub-native reimplementation (Scorecard's own registry still excludes GitLab). GitLab's API exposes no organization/company data, so this is a bus-factor/headcount proxy, not Scorecard's organizational-diversity measure |
-| Dependency-Scanning | 🧩 | security-hub-native, not a Scorecard check. Scores whether recent pipelines upload a `dependency_scanning`-type artifact. Distinct from Scorecard's OSV.dev-based `Vulnerabilities` check and from having an SBOM (an inventory, not a scan) |
-| SAST | 🧩 | security-hub-native reimplementation (Scorecard's own SAST check only recognizes GitHub's CodeQL/SonarCloud apps). Scores whether recent pipelines upload a `sast`-type artifact |
-| Secret-Detection | 🧩 | security-hub-native, not a Scorecard check (Scorecard has no equivalent on any platform). Scores whether recent pipelines upload a `secret_detection`-type artifact |
+| Dependency-Scanning | 🧩 | security-hub-native, not a Scorecard check. Scores whether recent successful default-branch pipelines upload a `dependency_scanning`-type artifact. Distinct from Scorecard's OSV.dev-based `Vulnerabilities` check and from having an SBOM (an inventory, not a scan) |
+| SAST | 🧩 | security-hub-native reimplementation (Scorecard's own SAST check only recognizes GitHub's CodeQL/SonarCloud apps). Scores whether recent successful default-branch pipelines upload a `sast`-type artifact |
+| Secret-Detection | 🧩 | security-hub-native, not a Scorecard check (Scorecard has no equivalent on any platform). Scores whether recent successful default-branch pipelines upload a `secret_detection`-type artifact |
 | Dangerous-Workflow | ❌ | Analyzes GitHub Actions workflow syntax |
 | Packaging | ❌ | Looks for GitHub Packages publish workflows |
 | Signed-Releases | ❌ | Looks for GitHub release assets |
@@ -69,7 +69,9 @@ Code-Quality, Contributors, Dependency-Scanning, SAST, and Secret-Detection are 
 customScores: ["Code-Quality", "Contributors", "Dependency-Scanning", "SAST", "Secret-Detection"] # empty (the default) runs none of them
 ```
 
-Once enabled, each is shown as `N/A` only if the underlying GitLab API call itself fails for a given project.
+The four artifact-based checks (Code-Quality, Dependency-Scanning, SAST, Secret-Detection) sample the same window: the project's five most recent **successful** pipelines **on its default branch**. Both filters keep the score answering "does this project run the scanner" rather than "what happened to run last": an in-flight, canceled or skipped pipeline has no finished artifacts and would otherwise count against the project just for existing, and a burst of merge request or feature-branch pipelines that skip scanners would otherwise sink a project whose default branch runs them on every commit. A job that only ever runs on merge request pipelines is therefore not credited. All four are answered from a single pass over that window, so enabling them together costs no more API calls than enabling one.
+
+Once enabled, each is shown as `N/A` only if the underlying GitLab API call itself fails for a given project, or (for the artifact-based ones) if the project has no successful default-branch pipelines to sample at all.
 
 ### Experimental checks
 

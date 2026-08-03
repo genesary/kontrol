@@ -25,15 +25,20 @@ type ScoreStat struct {
 // (with children) or a project (a leaf). Score and Checks are populated by
 // the scan and aggregate steps; they are nil until then.
 type Node struct {
-	Score        *ScoreStat            `json:"score,omitempty"`
-	Checks       map[string]*ScoreStat `json:"checks,omitempty"`
-	Kind         Kind                  `json:"kind"`
-	Name         string                `json:"name"`
-	FullPath     string                `json:"fullPath"`
-	WebURL       string                `json:"webUrl"`
-	ScanError    string                `json:"scanError,omitempty"`
-	Children     []*Node               `json:"children,omitempty"`
-	ProjectCount int                   `json:"projectCount"`
+	Score    *ScoreStat            `json:"score,omitempty"`
+	Checks   map[string]*ScoreStat `json:"checks,omitempty"`
+	Kind     Kind                  `json:"kind"`
+	Name     string                `json:"name"`
+	FullPath string                `json:"fullPath"`
+	WebURL   string                `json:"webUrl"`
+	// DefaultBranch is the project's default branch as reported by discovery,
+	// carried so checks that need it don't have to re-fetch the project. It is
+	// empty for group nodes and for projects with no commits yet. Internal
+	// plumbing between discovery and scan, so it stays out of the report JSON.
+	DefaultBranch string  `json:"-"`
+	ScanError     string  `json:"scanError,omitempty"`
+	Children      []*Node `json:"children,omitempty"`
+	ProjectCount  int     `json:"projectCount"`
 }
 
 // Combine merges a set of ScoreStats into a single weighted average,

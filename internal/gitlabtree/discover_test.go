@@ -21,7 +21,10 @@ func TestBuildTreeInfersGroupsFromPaths(t *testing.T) {
 	t.Parallel()
 
 	projects := []*gitlab.Project{
-		{Path: "service", PathWithNamespace: "team/backend/service", WebURL: "https://gitlab.example.com/team/backend/service"},
+		{
+			Path: "service", PathWithNamespace: "team/backend/service",
+			WebURL: "https://gitlab.example.com/team/backend/service", DefaultBranch: "main",
+		},
 		{Path: "frontend", PathWithNamespace: "team/frontend", WebURL: "https://gitlab.example.com/team/frontend"},
 		{Path: "standalone", PathWithNamespace: "standalone", WebURL: "https://gitlab.example.com/standalone"},
 	}
@@ -54,6 +57,16 @@ func TestBuildTreeInfersGroupsFromPaths(t *testing.T) {
 
 	if len(backend.Children) != 1 || backend.Children[0].FullPath != "team/backend/service" {
 		t.Fatalf("backend.Children = %+v, want single project %q", backend.Children, "team/backend/service")
+	}
+
+	// Carried from discovery so checks that need it don't re-fetch the
+	// project; groups never have one.
+	if got := backend.Children[0].DefaultBranch; got != "main" {
+		t.Errorf("service.DefaultBranch = %q, want %q", got, "main")
+	}
+
+	if got := backend.DefaultBranch; got != "" {
+		t.Errorf("backend (group).DefaultBranch = %q, want empty", got)
 	}
 
 	frontend := team.Children[1]

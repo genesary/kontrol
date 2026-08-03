@@ -187,11 +187,11 @@ func TestIsOfflineUnsafe(t *testing.T) {
 		name string
 		want bool
 	}{
-		"Vulnerabilities is unsafe":          {checks.CheckVulnerabilities, true},
-		"CII-Best-Practices is unsafe":       {checks.CheckCIIBestPractices, true},
-		"Fuzzing is unsafe":                  {checks.CheckFuzzing, true},
-		"case-insensitive match":             {"vulnerabilities", true},
-		"Maintained is safe":                 {"Maintained", false},
+		"Vulnerabilities is unsafe":           {checks.CheckVulnerabilities, true},
+		"CII-Best-Practices is unsafe":        {checks.CheckCIIBestPractices, true},
+		"Fuzzing is unsafe":                   {checks.CheckFuzzing, true},
+		"case-insensitive match":              {"vulnerabilities", true},
+		"Maintained is safe":                  {"Maintained", false},
 		"Code-Quality (custom check) is safe": {"Code-Quality", false},
 	}
 
@@ -343,7 +343,7 @@ func TestRunCustomChecksRespectsEnabledAndWeight(t *testing.T) {
 
 	checkScores := map[string]*gitlabtree.ScoreStat{}
 
-	runCustomChecks(context.Background(), opts, "group/project", checkScores)
+	runCustomChecks(context.Background(), opts, "group/project", "main", checkScores)
 
 	stat := checkScores[customchecks.CheckContributors]
 	if stat == nil || stat.Count != defaultWeight {
@@ -368,7 +368,7 @@ func TestRunCustomChecksRespectsEnabledAndWeight(t *testing.T) {
 func TestProjectFailsOnInvalidRepoPath(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := Project(context.Background(), Options{Host: ""}, "onlyonesegment")
+	_, _, err := Project(context.Background(), Options{Host: ""}, "onlyonesegment", "main")
 	if err == nil {
 		t.Fatal("Project() error = nil, want non-nil for a repo path with no host")
 	}
@@ -389,7 +389,7 @@ func TestProjectFailsWhenScorecardCannotReachHost(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, _, err := Project(ctx, Options{Host: "gitlab.invalid.example"}, "group/project")
+	_, _, err := Project(ctx, Options{Host: "gitlab.invalid.example"}, "group/project", "main")
 	if err == nil {
 		t.Fatal("Project() error = nil, want non-nil when the gitlab host is unreachable")
 	}

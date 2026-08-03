@@ -171,7 +171,7 @@ func scanProjects(ctx context.Context, opts scan.Options, projects []*gitlabtree
 func scanOne(ctx context.Context, opts scan.Options, node *gitlabtree.Node) {
 	zap.L().Debug("Scanning project", zap.String("project", node.FullPath))
 
-	score, checkScores, err := scan.Project(ctx, opts, node.FullPath)
+	score, checkScores, err := scan.Project(ctx, opts, node.FullPath, node.DefaultBranch)
 	if err != nil {
 		zap.L().Warn("Scan failed", zap.String("project", node.FullPath), zap.Error(err))
 

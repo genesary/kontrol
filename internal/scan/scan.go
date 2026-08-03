@@ -56,7 +56,9 @@ func weightFor(name string, weights map[string]int) int {
 // full path, e.g. "group/subgroup/project") and returns its overall score
 // and per-check scores as weight-1 stats ready to be merged into the
 // discovery tree.
-func Project(ctx context.Context, opts Options, fullPath string) (*gitlabtree.ScoreStat, map[string]*gitlabtree.ScoreStat, error) {
+func Project(
+	ctx context.Context, opts Options, fullPath, defaultBranch string,
+) (*gitlabtree.ScoreStat, map[string]*gitlabtree.ScoreStat, error) {
 	repo, err := gitlabrepo.MakeGitlabRepo(fmt.Sprintf("%s/%s", opts.Host, fullPath))
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolving gitlab repo %q: %w", fullPath, err)
@@ -86,7 +88,7 @@ func Project(ctx context.Context, opts Options, fullPath string) (*gitlabtree.Sc
 		checkScores[name] = nil
 	}
 
-	runCustomChecks(ctx, opts, fullPath, checkScores)
+	runCustomChecks(ctx, opts, fullPath, defaultBranch, checkScores)
 
 	overall, err := overallScoreFor(result, checkScores, opts.Weights)
 	if err != nil {
@@ -152,10 +154,12 @@ type customCheckRunner struct {
 // check for a project and records its result in checkScores. The
 // report-artifact checks are scored as one batch rather than one at a time,
 // since they all read the same pipelines and jobs.
-func runCustomChecks(ctx context.Context, opts Options, fullPath string, checkScores map[string]*gitlabtree.ScoreStat) {
+func runCustomChecks(
+	ctx context.Context, opts Options, fullPath, defaultBranch string, checkScores map[string]*gitlabtree.ScoreStat,
+) {
 	requested := requestedCustomChecks(opts)
 
-	runReportArtifactChecks(ctx, opts, fullPath, requested, checkScores)
+	runReportArtifactChecks(ctx, opts, fullPath, defaultBranch, requested, checkScores)
 
 	runners := []customCheckRunner{
 		{name: customchecks.CheckContributors, run: func() (*gitlabtree.ScoreStat, error) {
@@ -195,7 +199,8 @@ func requestedCustomChecks(opts Options) map[string]int {
 // N/A rather than aborting the project's scan, here for every check in the
 // batch since they share the fetch that failed.
 func runReportArtifactChecks(
-	ctx context.Context, opts Options, fullPath string, requested map[string]int, checkScores map[string]*gitlabtree.ScoreStat,
+	ctx context.Context, opts Options, fullPath, defaultBranch string,
+	requested map[string]int, checkScores map[string]*gitlabtree.ScoreStat,
 ) {
 	names := make([]string, 0, len(requested))
 
@@ -209,7 +214,7 @@ func runReportArtifactChecks(
 		return
 	}
 
-	scores, err := customchecks.ReportArtifactScores(ctx, opts.GitlabClient, fullPath, names)
+	scores, err := customchecks.ReportArtifactScores(ctx, opts.GitlabClient, fullPath, defaultBranch, names)
 	if err != nil {
 		for _, name := range names {
 			warnCustomCheckFailed(name, fullPath, err)

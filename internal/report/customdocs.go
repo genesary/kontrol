@@ -18,9 +18,10 @@ func customCheckDocs() map[string]checkDoc {
 	return map[string]checkDoc{
 		customchecks.CheckCodeQuality: reportArtifactDoc(
 			"Recent pipelines produce a Code Quality report",
-			"Checks whether the project's most recent pipelines upload a Code Climate-format report via "+
-				"artifacts.reports.codequality in .gitlab-ci.yml. This is a linting/code-style signal, not "+
-				"a security scan, it is unrelated to SAST, secret detection, or dependency scanning.",
+			"Checks whether the project's most recent successful default-branch pipelines upload a Code "+
+				"Climate-format report via artifacts.reports.codequality in .gitlab-ci.yml. This is a "+
+				"linting/code-style signal, not a security scan, it is unrelated to SAST, secret detection, "+
+				"or dependency scanning.",
 			"runs a Code Quality analysis",
 			"codequality",
 			"Code-Quality",
@@ -40,8 +41,8 @@ func customCheckDocs() map[string]checkDoc {
 		},
 		customchecks.CheckDependencyScanning: reportArtifactDoc(
 			"Recent pipelines produce a Dependency-Scanning report",
-			"Checks whether the project's most recent pipelines upload a report via "+
-				"artifacts.reports.dependency_scanning in .gitlab-ci.yml. security-hub-native, not a "+
+			"Checks whether the project's most recent successful default-branch pipelines upload a report "+
+				"via artifacts.reports.dependency_scanning in .gitlab-ci.yml. security-hub-native, not a "+
 				"Scorecard check. This is about actively scanning dependencies for known vulnerabilities, "+
 				"distinct from Scorecard's own Vulnerabilities check (OSV.dev-based) and from having an "+
 				"SBOM (a dependency inventory, not a scan).",
@@ -51,8 +52,9 @@ func customCheckDocs() map[string]checkDoc {
 		),
 		customchecks.CheckSAST: reportArtifactDoc(
 			"Recent pipelines produce a SAST report",
-			"Checks whether the project's most recent pipelines upload a report via artifacts.reports.sast "+
-				"in .gitlab-ci.yml. This is a security-hub-native reimplementation: Scorecard's own SAST "+
+			"Checks whether the project's most recent successful default-branch pipelines upload a report "+
+				"via artifacts.reports.sast in .gitlab-ci.yml. This is a security-hub-native "+
+				"reimplementation: Scorecard's own SAST "+
 				"check only recognizes GitHub's CodeQL and SonarCloud apps, so it never finds a signal on "+
 				"GitLab.",
 			"runs a static analysis security testing scanner",
@@ -61,8 +63,8 @@ func customCheckDocs() map[string]checkDoc {
 		),
 		customchecks.CheckSecretDetection: reportArtifactDoc(
 			"Recent pipelines produce a Secret-Detection report",
-			"Checks whether the project's most recent pipelines upload a report via "+
-				"artifacts.reports.secret_detection in .gitlab-ci.yml. security-hub-native, not a "+
+			"Checks whether the project's most recent successful default-branch pipelines upload a report "+
+				"via artifacts.reports.secret_detection in .gitlab-ci.yml. security-hub-native, not a "+
 				"Scorecard check: Scorecard has no equivalent check on any platform.",
 			"runs a secret-scanning tool",
 			"secret_detection",
@@ -83,8 +85,10 @@ func reportArtifactDoc(short, description, jobDescription, artifactType, templat
 			fmt.Sprintf("Add a job that %s and uploads its report under artifacts.reports.%s.", jobDescription, artifactType),
 			fmt.Sprintf("GitLab ships a ready-made %s.gitlab-ci.yml template you can include as a fast "+
 				"path instead of writing the job by hand.", templateName),
-			"A partial (neither 0 nor 10) score means the job isn't running on every pipeline, check " +
-				"that it isn't restricted to a branch, tag, or rule that recent pipelines don't match.",
+			"Only successful pipelines on the project's default branch are sampled, so a job that runs " +
+				"solely on merge request or feature-branch pipelines will not be credited.",
+			"A partial (neither 0 nor 10) score means the job isn't running on every sampled pipeline, " +
+				"check that it isn't restricted to a rule that recent default-branch pipelines don't match.",
 		},
 	}
 }

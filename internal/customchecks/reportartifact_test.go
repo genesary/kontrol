@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/boxboxjason/security-hub/internal/gitlabtree"
 )
@@ -112,7 +115,7 @@ func TestReportArtifactScoresEndToEnd(t *testing.T) {
 		}
 	})
 
-	got, err := ReportArtifactScores(context.Background(), client, "group/project", []string{CheckSAST})
+	got, err := ReportArtifactScores(context.Background(), client, "group/project", "main", []string{CheckSAST})
 	if err != nil {
 		t.Fatalf("ReportArtifactScores() error = %v", err)
 	}
@@ -151,7 +154,7 @@ func TestReportArtifactScoresIsolatesCheckFileTypes(t *testing.T) {
 				}
 			})
 
-			got, err := ReportArtifactScores(context.Background(), client, "group/project", allReportArtifactChecks)
+			got, err := ReportArtifactScores(context.Background(), client, "group/project", "main", allReportArtifactChecks)
 			if err != nil {
 				t.Fatalf("ReportArtifactScores() error = %v", err)
 			}
@@ -199,7 +202,7 @@ func TestReportArtifactScoresSharesOnePassAcrossChecks(t *testing.T) {
 		}
 	})
 
-	_, err := ReportArtifactScores(context.Background(), client, "group/project", allReportArtifactChecks)
+	_, err := ReportArtifactScores(context.Background(), client, "group/project", "main", allReportArtifactChecks)
 	if err != nil {
 		t.Fatalf("ReportArtifactScores() error = %v", err)
 	}
@@ -215,6 +218,74 @@ func TestReportArtifactScoresSharesOnePassAcrossChecks(t *testing.T) {
 	}
 }
 
+// TestSampledPipelinesScopesTheSamplingWindow pins the query actually sent
+// to GitLab. Every report-artifact score is a fraction of this sample, so a
+// silent change to it (say, losing per_page and inheriting GitLab's default
+// of 20, or dropping the status filter) would move every score in the report
+// without any other test noticing.
+func TestSampledPipelinesScopesTheSamplingWindow(t *testing.T) {
+	t.Parallel()
+
+	var got url.Values
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[]`)
+	})
+
+	_, err := sampledPipelines(context.Background(), client, "group/project", "main")
+	if err != nil {
+		t.Fatalf("sampledPipelines() error = %v", err)
+	}
+
+	want := map[string]string{
+		"per_page": strconv.Itoa(reportArtifactLookback),
+		"order_by": "id",
+		"sort":     "desc",
+		"status":   string(gitlab.Success),
+		"ref":      "main",
+	}
+
+	for param, wantValue := range want {
+		if gotValue := got.Get(param); gotValue != wantValue {
+			t.Errorf("pipelines request %s = %q, want %q (full query: %q)", param, gotValue, wantValue, got.Encode())
+		}
+	}
+}
+
+// TestSampledPipelinesFallsBackToEveryRefWithoutADefaultBranch asserts a
+// project whose default branch discovery never learned (one with no commits,
+// say) is sampled across every ref rather than against an empty ref filter,
+// which GitLab would answer with nothing.
+func TestSampledPipelinesFallsBackToEveryRefWithoutADefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	var got url.Values
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[]`)
+	})
+
+	_, err := sampledPipelines(context.Background(), client, "group/project", "")
+	if err != nil {
+		t.Fatalf("sampledPipelines() error = %v", err)
+	}
+
+	if _, ok := got["ref"]; ok {
+		t.Errorf("pipelines request sent ref = %q, want the parameter omitted entirely", got.Get("ref"))
+	}
+
+	// The status filter is independent of the ref one and must survive.
+	if status := got.Get("status"); status != string(gitlab.Success) {
+		t.Errorf("pipelines request status = %q, want %q", status, gitlab.Success)
+	}
+}
+
 func TestReportArtifactScoresIgnoresUnknownCheckNames(t *testing.T) {
 	t.Parallel()
 
@@ -223,7 +294,7 @@ func TestReportArtifactScoresIgnoresUnknownCheckNames(t *testing.T) {
 		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	})
 
-	got, err := ReportArtifactScores(context.Background(), client, "group/project", []string{CheckContributors, "Maintained"})
+	got, err := ReportArtifactScores(context.Background(), client, "group/project", "main", []string{CheckContributors, "Maintained"})
 	if err != nil {
 		t.Fatalf("ReportArtifactScores() error = %v", err)
 	}
@@ -267,7 +338,7 @@ func TestReportArtifactScoresWalkEveryJobPage(t *testing.T) {
 		}
 	})
 
-	got, err := ReportArtifactScores(context.Background(), client, "group/project", []string{CheckSAST})
+	got, err := ReportArtifactScores(context.Background(), client, "group/project", "main", []string{CheckSAST})
 	if err != nil {
 		t.Fatalf("ReportArtifactScores() error = %v", err)
 	}
@@ -345,7 +416,7 @@ func TestReportArtifactScoresPipelinesListError(t *testing.T) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	})
 
-	_, err := ReportArtifactScores(context.Background(), client, "group/project", []string{CheckSAST})
+	_, err := ReportArtifactScores(context.Background(), client, "group/project", "main", []string{CheckSAST})
 	if err == nil {
 		t.Fatal("ReportArtifactScores() error = nil, want non-nil for pipeline listing failure")
 	}
@@ -368,7 +439,7 @@ func TestReportArtifactScoresJobsListError(t *testing.T) {
 		}
 	})
 
-	_, err := ReportArtifactScores(context.Background(), client, "group/project", []string{CheckSAST})
+	_, err := ReportArtifactScores(context.Background(), client, "group/project", "main", []string{CheckSAST})
 	if err == nil {
 		t.Fatal("ReportArtifactScores() error = nil, want non-nil for job listing failure")
 	}
@@ -395,7 +466,7 @@ func TestReportArtifactScoresNoPipelinesIsInconclusive(t *testing.T) {
 		fmt.Fprint(w, `[]`)
 	})
 
-	got, err := ReportArtifactScores(context.Background(), client, "group/project", allReportArtifactChecks)
+	got, err := ReportArtifactScores(context.Background(), client, "group/project", "main", allReportArtifactChecks)
 	if err != nil {
 		t.Fatalf("ReportArtifactScores() error = %v", err)
 	}

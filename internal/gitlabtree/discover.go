@@ -124,11 +124,12 @@ func buildTree(projects []*gitlab.Project) *Node {
 		parent := ensureGroup(groupsByPath, root, segments[:len(segments)-1])
 
 		parent.Children = append(parent.Children, &Node{
-			Kind:         KindProject,
-			Name:         project.Path,
-			FullPath:     project.PathWithNamespace,
-			WebURL:       project.WebURL,
-			ProjectCount: 1,
+			Kind:          KindProject,
+			Name:          project.Path,
+			FullPath:      project.PathWithNamespace,
+			WebURL:        project.WebURL,
+			DefaultBranch: project.DefaultBranch,
+			ProjectCount:  1,
 		})
 	}
 
