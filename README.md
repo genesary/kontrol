@@ -4,6 +4,8 @@
 
 ## What
 
+![Security Hub report preview](docs/preview.gif)
+
 `security-hub` walks every group, subgroup and project on a self-hosted GitLab instance, runs an [OpenSSF Scorecard](https://github.com/ossf/scorecard) analysis on each project, and rolls the results up into a single browsable HTML report. Instead of looking at one repo's score in isolation, you get:
 
 - An **instance-level overview**: average score per Scorecard check, plus one overall average, across every project GitLab knows about.
@@ -38,7 +40,7 @@ Set `scorecard.offline: true` (or `SECURITY_HUB_OFFLINE=true`) to disable that s
 Scorecard ships more checks than GitLab actually supports: several rely on GitHub- or Azure DevOps-specific APIs and artifacts (release assets, webhooks, Actions workflow permissions) that have no GitLab equivalent. When `scorecard.checks` is left empty, security-hub requests every check marked ✅ below. Checks marked ❌ are silently dropped by Scorecard itself before the run (Scorecard's own check registry doesn't declare GitLab support for them), so they never appear in the report at all, not even as `N/A`. This is a structural Scorecard-for-GitLab limitation, not a security-hub bug. Checks marked ⚠️ work on GitLab but are opt-in: see [Experimental checks](#experimental-checks). Checks marked 🧩 are security-hub's own, computed directly from the GitLab API rather than run through Scorecard, since Scorecard's check registry excludes them for GitLab regardless of `scorecard.checks`. Unlike Scorecard's own checks, 🧩 checks are opt-in individually via the root-level `customScores` list; leaving it empty (the default) runs none of them, see below.
 
 | Check | Runs on GitLab? | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Binary-Artifacts | ✅ | |
 | Branch-Protection | ✅ | GitLab has no releases-to-commits-to-branches association; part of the scoring is skipped |
 | CI-Tests | ✅ | |
@@ -143,7 +145,7 @@ weights:
 There is no env var override for it, since it's a map rather than a single value.
 
 | Env var | Purpose |
-|-------------------------|--------------------------------------------------------------------------|
+| ------------------------- | -------------------------------------------------------------------------- |
 | `GITLAB_URL` | Base URL of the self-hosted GitLab instance |
 | `GITLAB_TOKEN` | API token used for discovery and repo access |
 | `SECURITY_HUB_OFFLINE` | `true` to disable Scorecard checks that require internet access |
