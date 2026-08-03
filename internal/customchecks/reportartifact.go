@@ -16,6 +16,13 @@ import (
 // single pipeline.
 const reportArtifactLookback = 5
 
+// jobsPageSize is how many of a pipeline's jobs are fetched per request.
+// GitLab defaults to 20 when no per_page is sent, which is easily exceeded
+// by a large pipeline, so it is set explicitly and every page is walked: a
+// scanner job missed because it fell past the first page would silently
+// score the project as if it ran no scanner at all.
+const jobsPageSize = 100
+
 // reportArtifactScore reports whether a project's recent pipelines produce
 // a job artifact of the given GitLab report file_type (e.g. "codequality",
 // "sast", "secret_detection", "dependency_scanning"), on a 0-10 scale over
@@ -61,20 +68,31 @@ func scoreReportArtifact(pipelinesChecked, pipelinesWithReport int) *gitlabtree.
 }
 
 // pipelineHasReportArtifact reports whether any job in the given pipeline
-// produced a job artifact of the given file_type.
-func pipelineHasReportArtifact(ctx context.Context, gl *gitlab.Client, projectPath string, pipelineID int64, fileType string) (bool, error) {
-	jobs, _, err := gl.Jobs.ListPipelineJobs(projectPath, pipelineID, nil, gitlab.WithContext(ctx))
-	if err != nil {
-		return false, fmt.Errorf("listing jobs for pipeline %d of %q: %w", pipelineID, projectPath, err)
+// produced a job artifact of the given file_type, walking every page of the
+// pipeline's jobs rather than only the first.
+func pipelineHasReportArtifact(ctx context.Context, client *gitlab.Client, projectPath string, pipelineID int64, fileType string) (bool, error) {
+	opts := &gitlab.ListJobsOptions{
+		ListOptions: gitlab.ListOptions{PerPage: jobsPageSize, Page: 1},
 	}
 
-	for _, job := range jobs {
-		for _, artifact := range job.Artifacts {
-			if artifact.FileType == fileType {
-				return true, nil
+	for {
+		jobs, resp, err := client.Jobs.ListPipelineJobs(projectPath, pipelineID, opts, gitlab.WithContext(ctx))
+		if err != nil {
+			return false, fmt.Errorf("listing jobs for pipeline %d of %q: %w", pipelineID, projectPath, err)
+		}
+
+		for _, job := range jobs {
+			for _, artifact := range job.Artifacts {
+				if artifact.FileType == fileType {
+					return true, nil
+				}
 			}
 		}
-	}
 
-	return false, nil
+		if resp.NextPage == 0 {
+			return false, nil
+		}
+
+		opts.Page = resp.NextPage
+	}
 }

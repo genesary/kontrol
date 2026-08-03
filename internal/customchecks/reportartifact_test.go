@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -89,6 +90,80 @@ func TestReportArtifactScoreEndToEnd(t *testing.T) {
 
 	if got == nil || got.Average != wantAverage || got.Count != 1 {
 		t.Fatalf("reportArtifactScore() = %+v, want {Average: %v, Count: 1}", got, wantAverage)
+	}
+}
+
+// TestReportArtifactScoreWalksEveryJobPage asserts that a scanner job past
+// the first page of a large pipeline's jobs is still found. GitLab caps the
+// jobs endpoint at 20 per page when no per_page is sent, so a pipeline big
+// enough to spill over used to score as if it ran no scanner at all.
+func TestReportArtifactScoreWalksEveryJobPage(t *testing.T) {
+	t.Parallel()
+
+	var jobPagesServed int
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/pipelines"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"id":1}]`)
+		case strings.HasSuffix(r.URL.Path, "/pipelines/1/jobs"):
+			jobPagesServed++
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// The sast job lives on the second page: only a client that
+			// follows X-Next-Page will ever see it.
+			if r.URL.Query().Get("page") == "2" {
+				fmt.Fprint(w, `[{"id":21,"artifacts":[{"file_type":"sast"}]}]`)
+
+				return
+			}
+
+			w.Header().Set("X-Next-Page", "2")
+			fmt.Fprint(w, `[{"id":10,"artifacts":[{"file_type":"trace"}]}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	got, err := reportArtifactScore(context.Background(), client, "group/project", "sast")
+	if err != nil {
+		t.Fatalf("reportArtifactScore() error = %v", err)
+	}
+
+	const wantAverage = 10.0
+
+	if got == nil || got.Average != wantAverage {
+		t.Fatalf("reportArtifactScore() = %+v, want Average=%v (sast job is on job page 2)", got, wantAverage)
+	}
+
+	if jobPagesServed != 2 {
+		t.Fatalf("served %d job pages, want 2 (every page must be walked)", jobPagesServed)
+	}
+}
+
+// TestPipelineHasReportArtifactRequestsAFullJobPage asserts an explicit
+// per_page is sent, rather than silently inheriting GitLab's default of 20.
+func TestPipelineHasReportArtifactRequestsAFullJobPage(t *testing.T) {
+	t.Parallel()
+
+	var gotPerPage string
+
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPerPage = r.URL.Query().Get("per_page")
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[]`)
+	})
+
+	_, err := pipelineHasReportArtifact(context.Background(), client, "group/project", 1, "sast")
+	if err != nil {
+		t.Fatalf("pipelineHasReportArtifact() error = %v", err)
+	}
+
+	if want := strconv.Itoa(jobsPageSize); gotPerPage != want {
+		t.Fatalf("jobs request per_page = %q, want %q", gotPerPage, want)
 	}
 }
 
