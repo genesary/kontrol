@@ -72,6 +72,12 @@
     font-size: 0.875rem;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    /* The check-doc tooltip popover is a wide absolutely-positioned box
+     * anchored to a tiny icon; on narrower viewports it can extend past
+     * the right edge of the document. Without this, that overflow makes
+     * a horizontal scrollbar flash in, which shifts the layout under the
+     * cursor and triggers a hover/unhover flicker loop on the icon. */
+    overflow-x: hidden;
   }
 
   h1, h2, h3 {
