@@ -59,7 +59,7 @@ jobs:
       - name: Build
         run: |
           make build
-          cp ./bin/security-hub ./security-hub_${{ matrix.os }}_${{ matrix.arch }}
+          cp ./bin/kontrol ./kontrol_${{ matrix.os }}_${{ matrix.arch }}
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
@@ -70,8 +70,8 @@ jobs:
         uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
         with:
           upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./security-hub_${{ matrix.os }}_${{ matrix.arch }}
-          asset_name: security-hub_${{ github.ref_name }}_${{ matrix.os }}_${{ matrix.arch }}
+          asset_path: ./kontrol_${{ matrix.os }}_${{ matrix.arch }}
+          asset_name: kontrol_${{ github.ref_name }}_${{ matrix.os }}_${{ matrix.arch }}
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,7 +120,7 @@ jobs:
             org.opencontainers.image.title=${{ github.event.repository.name }}
             org.opencontainers.image.description=${{ github.event.repository.description }}
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
-            org.opencontainers.image.url=ghcr.io/boxboxjason/security-hub
+            org.opencontainers.image.url=ghcr.io/genesary/kontrol
             org.opencontainers.image.created=${{ env.CREATED }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}

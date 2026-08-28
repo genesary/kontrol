@@ -1,4 +1,4 @@
-// Package config loads security-hub's configuration from a YAML file,
+// Package config loads kontrol's configuration from a YAML file,
 // with select fields overridable via environment variables.
 package config
 
@@ -54,11 +54,11 @@ type Output struct {
 	Path string `yaml:"path"`
 }
 
-// Config is the root configuration for security-hub.
+// Config is the root configuration for kontrol.
 type Config struct {
 	Output Output `yaml:"output"`
 	Gitlab Gitlab `yaml:"gitlab"`
-	// CustomScores opts in to security-hub's own GitLab-native checks (see
+	// CustomScores opts in to kontrol's own GitLab-native checks (see
 	// internal/customchecks), each named after the check it reports under
 	// (e.g. "Code-Quality", "Contributors"). Unlike scorecard.checks, an
 	// empty list here means none of them run, not all of them: these checks
@@ -71,7 +71,7 @@ type Config struct {
 	// means the check is not run at all, the same as leaving it out of
 	// scorecard.checks or CustomScores. Configuring any weight switches the
 	// overall score from Scorecard's own risk-tier-weighted formula to
-	// security-hub's own weighted mean across every check that ran, so
+	// kontrol's own weighted mean across every check that ran, so
 	// weights actually affect the number reported.
 	Weights   map[string]int `yaml:"weights"`
 	Scorecard Scorecard      `yaml:"scorecard"`
@@ -106,7 +106,7 @@ func Load(path string) (*Config, error) {
 
 // applyEnvOverrides overlays environment variables on top of values loaded
 // from the config file, matching the documented GITLAB_URL, GITLAB_TOKEN and
-// SECURITY_HUB_OFFLINE variables.
+// KONTROL_OFFLINE variables.
 func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GITLAB_URL")); v != "" {
 		cfg.Gitlab.URL = v
@@ -116,14 +116,14 @@ func applyEnvOverrides(cfg *Config) {
 		cfg.Gitlab.Token = v
 	}
 
-	if v := strings.TrimSpace(os.Getenv("SECURITY_HUB_OFFLINE")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("KONTROL_OFFLINE")); v != "" {
 		offline, err := strconv.ParseBool(v)
 		if err == nil {
 			cfg.Scorecard.Offline = offline
 		}
 	}
 
-	if v := strings.TrimSpace(os.Getenv("SECURITY_HUB_EXPERIMENTAL")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("KONTROL_EXPERIMENTAL")); v != "" {
 		experimental, err := strconv.ParseBool(v)
 		if err == nil {
 			cfg.Scorecard.Experimental = experimental
@@ -171,7 +171,7 @@ func checkOutputWritable(outputDir string) error {
 		return fmt.Errorf("output.path %q: %w", outputDir, err)
 	}
 
-	probe, err := os.CreateTemp(outputDir, ".security-hub-write-test-*")
+	probe, err := os.CreateTemp(outputDir, ".kontrol-write-test-*")
 	if err != nil {
 		return fmt.Errorf("output.path %q is not writable: %w", outputDir, err)
 	}

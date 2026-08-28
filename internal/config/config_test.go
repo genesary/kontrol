@@ -252,8 +252,8 @@ func TestApplyEnvOverrides(t *testing.T) {
 		}
 	})
 
-	t.Run("SECURITY_HUB_OFFLINE overrides when a valid bool", func(t *testing.T) {
-		t.Setenv("SECURITY_HUB_OFFLINE", "true")
+	t.Run("KONTROL_OFFLINE overrides when a valid bool", func(t *testing.T) {
+		t.Setenv("KONTROL_OFFLINE", "true")
 
 		cfg := &Config{}
 		applyEnvOverrides(cfg)
@@ -263,8 +263,8 @@ func TestApplyEnvOverrides(t *testing.T) {
 		}
 	})
 
-	t.Run("SECURITY_HUB_OFFLINE is ignored when not a valid bool", func(t *testing.T) {
-		t.Setenv("SECURITY_HUB_OFFLINE", "not-a-bool")
+	t.Run("KONTROL_OFFLINE is ignored when not a valid bool", func(t *testing.T) {
+		t.Setenv("KONTROL_OFFLINE", "not-a-bool")
 
 		cfg := &Config{Scorecard: Scorecard{Offline: true}}
 		applyEnvOverrides(cfg)
@@ -274,8 +274,8 @@ func TestApplyEnvOverrides(t *testing.T) {
 		}
 	})
 
-	t.Run("SECURITY_HUB_EXPERIMENTAL overrides when a valid bool", func(t *testing.T) {
-		t.Setenv("SECURITY_HUB_EXPERIMENTAL", "true")
+	t.Run("KONTROL_EXPERIMENTAL overrides when a valid bool", func(t *testing.T) {
+		t.Setenv("KONTROL_EXPERIMENTAL", "true")
 
 		cfg := &Config{}
 		applyEnvOverrides(cfg)
@@ -285,8 +285,8 @@ func TestApplyEnvOverrides(t *testing.T) {
 		}
 	})
 
-	t.Run("SECURITY_HUB_EXPERIMENTAL is ignored when not a valid bool", func(t *testing.T) {
-		t.Setenv("SECURITY_HUB_EXPERIMENTAL", "not-a-bool")
+	t.Run("KONTROL_EXPERIMENTAL is ignored when not a valid bool", func(t *testing.T) {
+		t.Setenv("KONTROL_EXPERIMENTAL", "not-a-bool")
 
 		cfg := &Config{Scorecard: Scorecard{Experimental: true}}
 		applyEnvOverrides(cfg)

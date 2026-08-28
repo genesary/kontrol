@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
-	"github.com/boxboxjason/security-hub/internal/report"
+	"github.com/genesary/kontrol/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/report"
 )
 
 func TestRenderWritesValidReport(t *testing.T) {
@@ -145,7 +145,7 @@ func TestRenderIncludesCheckDocumentation(t *testing.T) {
 	}
 
 	if _, ok := docs["Contributors"]; !ok {
-		t.Errorf(`docs["Contributors"] missing, want security-hub's own custom-check documentation`)
+		t.Errorf(`docs["Contributors"] missing, want kontrol's own custom-check documentation`)
 	}
 
 	if _, ok := docs["Not-A-Real-Check"]; ok {

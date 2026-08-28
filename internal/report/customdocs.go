@@ -3,10 +3,10 @@ package report
 import (
 	"fmt"
 
-	"github.com/boxboxjason/security-hub/internal/customchecks"
+	"github.com/genesary/kontrol/internal/customchecks"
 )
 
-// customCheckDocs returns hand-written documentation for security-hub's own
+// customCheckDocs returns hand-written documentation for kontrol's own
 // checks (internal/customchecks), which have no Scorecard-authored doc to
 // borrow. Or, for Contributors and SAST, would be actively misleading if
 // borrowed, since Scorecard's versions of those checks describe things
@@ -42,7 +42,7 @@ func customCheckDocs() map[string]checkDoc {
 		customchecks.CheckDependencyScanning: reportArtifactDoc(
 			"Recent pipelines produce a Dependency-Scanning report",
 			"Checks whether the project's most recent successful default-branch pipelines upload a report "+
-				"via artifacts.reports.dependency_scanning in .gitlab-ci.yml. security-hub-native, not a "+
+				"via artifacts.reports.dependency_scanning in .gitlab-ci.yml. kontrol-native, not a "+
 				"Scorecard check. This is about actively scanning dependencies for known vulnerabilities, "+
 				"distinct from Scorecard's own Vulnerabilities check (OSV.dev-based) and from having an "+
 				"SBOM (a dependency inventory, not a scan).",
@@ -53,7 +53,7 @@ func customCheckDocs() map[string]checkDoc {
 		customchecks.CheckSAST: reportArtifactDoc(
 			"Recent pipelines produce a SAST report",
 			"Checks whether the project's most recent successful default-branch pipelines upload a report "+
-				"via artifacts.reports.sast in .gitlab-ci.yml. This is a security-hub-native "+
+				"via artifacts.reports.sast in .gitlab-ci.yml. This is a kontrol-native "+
 				"reimplementation: Scorecard's own SAST "+
 				"check only recognizes GitHub's CodeQL and SonarCloud apps, so it never finds a signal on "+
 				"GitLab.",
@@ -64,7 +64,7 @@ func customCheckDocs() map[string]checkDoc {
 		customchecks.CheckSecretDetection: reportArtifactDoc(
 			"Recent pipelines produce a Secret-Detection report",
 			"Checks whether the project's most recent successful default-branch pipelines upload a report "+
-				"via artifacts.reports.secret_detection in .gitlab-ci.yml. security-hub-native, not a "+
+				"via artifacts.reports.secret_detection in .gitlab-ci.yml. kontrol-native, not a "+
 				"Scorecard check: Scorecard has no equivalent check on any platform.",
 			"runs a secret-scanning tool",
 			"secret_detection",

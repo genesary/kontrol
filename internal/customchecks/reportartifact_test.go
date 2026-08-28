@@ -11,7 +11,7 @@ import (
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/gitlabtree"
 )
 
 // allReportArtifactChecks is every check built on the report-artifact

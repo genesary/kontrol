@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/boxboxjason/security-hub/internal/config"
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
-	"github.com/boxboxjason/security-hub/internal/scan"
+	"github.com/genesary/kontrol/internal/config"
+	"github.com/genesary/kontrol/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/scan"
 )
 
 func TestHostOf(t *testing.T) {

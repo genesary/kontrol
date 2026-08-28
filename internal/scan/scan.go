@@ -15,8 +15,8 @@ import (
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 	"go.uber.org/zap"
 
-	"github.com/boxboxjason/security-hub/internal/customchecks"
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/customchecks"
+	"github.com/genesary/kontrol/internal/gitlabtree"
 )
 
 // Options configures how Scorecard analyzes each project.
@@ -30,7 +30,7 @@ type Options struct {
 	Host    string
 	Token   string
 	Checks  []string
-	// CustomChecks lists the security-hub-native checks (internal/customchecks)
+	// CustomChecks lists the kontrol-native checks (internal/customchecks)
 	// to run, by name. Unlike Checks, an empty list means none of them run,
 	// not all of them: these checks make extra GitLab API calls per project,
 	// so they stay opt-in.
@@ -105,11 +105,11 @@ func markSkippedOffline(checkScores map[string]*gitlabtree.ScoreStat, skippedOff
 
 // overallScoreFor computes a project's overall score. With no weights
 // configured, it defers entirely to Scorecard's own risk-tier-weighted
-// GetAggregateScore, unchanged from security-hub's original behavior (which
+// GetAggregateScore, unchanged from kontrol's original behavior (which
 // never sees CustomScores checks). As soon as any weight is configured, it
 // instead combines every check present in checkScores (Scorecard's and
 // CustomScores', already Count-weighted by toScoreStats/runCustomCheck)
-// into security-hub's own weighted mean, so weights actually change the
+// into kontrol's own weighted mean, so weights actually change the
 // number.
 func overallScoreFor(
 	result scorecard.Result, checkScores map[string]*gitlabtree.ScoreStat, weights map[string]int,
@@ -145,7 +145,7 @@ func overallScoreFor(
 	return &gitlabtree.ScoreStat{Average: combined.Average, Count: 1}, nil
 }
 
-// customCheckRunner pairs a security-hub-native check's name with the
+// customCheckRunner pairs a kontrol-native check's name with the
 // closure that computes it, so runCustomChecks can dispatch every check
 // through one loop instead of one enabled/weight branch per check: that
 // branch count is what previously drove Project's cyclomatic complexity
@@ -155,7 +155,7 @@ type customCheckRunner struct {
 	name string
 }
 
-// runCustomChecks runs every enabled, non-zero-weight security-hub-native
+// runCustomChecks runs every enabled, non-zero-weight kontrol-native
 // check for a project and records its result in checkScores. The
 // report-artifact checks are scored as one batch rather than one at a time,
 // since they all read the same pipelines and jobs.
@@ -235,7 +235,7 @@ func runReportArtifactChecks(
 	}
 }
 
-// runCustomCheck computes a security-hub-native check and records its result
+// runCustomCheck computes a kontrol-native check and records its result
 // under name, rescaled to weight. Unlike a Scorecard-side failure, an error
 // here is logged and recorded as nil (rendered as "N/A") rather than
 // propagated: a flaky custom check must not abort the whole project's scan.

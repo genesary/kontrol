@@ -3,7 +3,7 @@ package gitlabtree_test
 import (
 	"testing"
 
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/gitlabtree"
 )
 
 // project is a small helper building a leaf project node with a given

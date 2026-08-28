@@ -12,8 +12,8 @@ RUN apk add --no-cache make git && \
 
 FROM alpine:3.24.1 AS security_provider
 
-RUN addgroup -S -g 1000 security-hub \
-    && adduser -S -u 1000 -G security-hub security-hub
+RUN addgroup -S -g 1000 kontrol \
+    && adduser -S -u 1000 -G kontrol kontrol
 
 FROM scratch
 
@@ -24,8 +24,8 @@ COPY --from=security_provider /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Add a writable /tmp directory to the image (required by scorecard)
 COPY --from=security_provider --chown=1000:1000 --chmod=1777 /tmp /tmp
 
-USER security-hub
+USER kontrol
 
-COPY --from=build /app/bin/security-hub /usr/local/bin/security-hub
+COPY --from=build /app/bin/kontrol /usr/local/bin/kontrol
 
-ENTRYPOINT [ "/usr/local/bin/security-hub" ]
+ENTRYPOINT [ "/usr/local/bin/kontrol" ]

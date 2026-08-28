@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/boxboxjason/security-hub/internal/config"
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
-	"github.com/boxboxjason/security-hub/internal/report"
-	"github.com/boxboxjason/security-hub/internal/scan"
+	"github.com/genesary/kontrol/internal/config"
+	"github.com/genesary/kontrol/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/report"
+	"github.com/genesary/kontrol/internal/scan"
 )
 
 // unlimitedConcurrency is the errgroup.SetLimit value that removes any cap
@@ -28,7 +28,7 @@ const unlimitedConcurrency = -1
 // against every project it finds, aggregates the results into
 // project-count-weighted averages, and renders the HTML report.
 func Run(ctx context.Context, cfg *config.Config) error {
-	zap.L().Info("Starting security-hub scan",
+	zap.L().Info("Starting kontrol scan",
 		zap.String("gitlab", cfg.Gitlab.URL),
 		zap.Bool("offline", cfg.Scorecard.Offline),
 		zap.Bool("experimental", cfg.Scorecard.Experimental))

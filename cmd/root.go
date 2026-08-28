@@ -1,4 +1,4 @@
-// Package cmd implements security-hub's command-line interface.
+// Package cmd implements kontrol's command-line interface.
 package cmd
 
 import (
@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/boxboxjason/security-hub/internal/config"
-	"github.com/boxboxjason/security-hub/internal/pipeline"
+	"github.com/genesary/kontrol/internal/config"
+	"github.com/genesary/kontrol/internal/pipeline"
 )
 
 const defaultConfigPath = "config.yaml"
@@ -30,9 +30,9 @@ func buildRootCmd() *cobra.Command {
 	var verbose bool
 
 	rootCmd := &cobra.Command{
-		Use:   "security-hub",
+		Use:   "kontrol",
 		Short: "Aggregate OpenSSF Scorecard results across a GitLab instance",
-		Long:  "security-hub scans every project in a self-hosted GitLab instance with OpenSSF Scorecard and renders a single drill-down HTML report.",
+		Long:  "kontrol scans every project in a self-hosted GitLab instance with OpenSSF Scorecard and renders a single drill-down HTML report.",
 		PersistentPreRun: func(*cobra.Command, []string) {
 			setupLogger(verbose)
 		},

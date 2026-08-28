@@ -1,5 +1,5 @@
 // Export buttons for the report. Reads the same tree report.js already
-// parsed (via window.SecurityHubReport) instead of re-parsing the JSON, and
+// parsed (via window.KontrolReport) instead of re-parsing the JSON, and
 // needs no network access, so it works whether the report is opened from
 // disk (file://) or served over http.
 (function () {
@@ -7,7 +7,9 @@
 
   function flattenTree(node, rows) {
     rows.push(node);
-    (node.children || []).forEach(function (child) { flattenTree(child, rows); });
+    (node.children || []).forEach(function (child) {
+      flattenTree(child, rows);
+    });
 
     return rows;
   }
@@ -15,7 +17,9 @@
   function collectCheckNames(rows) {
     var names = {};
     rows.forEach(function (node) {
-      Object.keys(node.checks || {}).forEach(function (name) { names[name] = true; });
+      Object.keys(node.checks || {}).forEach(function (name) {
+        names[name] = true;
+      });
     });
 
     return Object.keys(names).sort();
@@ -37,7 +41,9 @@
   function buildCSV(root) {
     var rows = flattenTree(root, []);
     var checkNames = collectCheckNames(rows);
-    var header = ["Path", "Kind", "Projects", "Overall Score", "Band"].concat(checkNames);
+    var header = ["Path", "Kind", "Projects", "Overall Score", "Band"].concat(
+      checkNames,
+    );
 
     var lines = [header.map(csvField).join(",")];
     rows.forEach(function (node) {
@@ -46,8 +52,12 @@
         node.kind || "",
         node.projectCount || 0,
         scoreValue(node.score),
-        window.SecurityHubReport.band(node.score).label,
-      ].concat(checkNames.map(function (name) { return scoreValue((node.checks || {})[name]); }));
+        window.KontrolReport.band(node.score).label,
+      ].concat(
+        checkNames.map(function (name) {
+          return scoreValue((node.checks || {})[name]);
+        }),
+      );
       lines.push(line.map(csvField).join(","));
     });
 
@@ -71,15 +81,19 @@
   }
 
   function exportCSV() {
-    var root = window.SecurityHubReport.getRoot();
-    downloadBlob(buildCSV(root), "text/csv;charset=utf-8;", "security-hub-report-" + dateStamp() + ".csv");
+    var root = window.KontrolReport.getRoot();
+    downloadBlob(
+      buildCSV(root),
+      "text/csv;charset=utf-8;",
+      "kontrol-report-" + dateStamp() + ".csv",
+    );
   }
 
   // Browsers name a saved PDF after the document title, so swap in a
   // filename-shaped title for the duration of the print job.
   function exportPDF() {
     var previousTitle = document.title;
-    document.title = "security-hub-report-" + dateStamp();
+    document.title = "kontrol-report-" + dateStamp();
 
     function restore() {
       document.title = previousTitle;

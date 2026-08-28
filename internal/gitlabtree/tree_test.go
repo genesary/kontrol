@@ -3,7 +3,7 @@ package gitlabtree_test
 import (
 	"testing"
 
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/gitlabtree"
 )
 
 // Combine is the arithmetic behind every number in the report, at every

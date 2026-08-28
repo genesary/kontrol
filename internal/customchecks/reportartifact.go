@@ -6,7 +6,7 @@ import (
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/gitlabtree"
 )
 
 // reportArtifactLookback bounds how many of a project's most recent
@@ -22,7 +22,7 @@ const reportArtifactLookback = 5
 // score the project as if it ran no scanner at all.
 const jobsPageSize = 100
 
-// reportArtifactFileTypes maps each security-hub-native check built on the
+// reportArtifactFileTypes maps each kontrol-native check built on the
 // report-artifact pattern to the GitLab report file_type it looks for. These
 // checks are identical apart from that file type, which is what lets them all
 // be answered from a single pass over a project's pipelines.

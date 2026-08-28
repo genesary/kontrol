@@ -1,4 +1,4 @@
-module github.com/boxboxjason/security-hub
+module github.com/genesary/kontrol
 
 go 1.26.5
 

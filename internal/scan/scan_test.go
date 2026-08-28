@@ -15,8 +15,8 @@ import (
 	"github.com/ossf/scorecard/v5/pkg/scorecard"
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/boxboxjason/security-hub/internal/customchecks"
-	"github.com/boxboxjason/security-hub/internal/gitlabtree"
+	"github.com/genesary/kontrol/internal/customchecks"
+	"github.com/genesary/kontrol/internal/gitlabtree"
 )
 
 func TestWeightFor(t *testing.T) {

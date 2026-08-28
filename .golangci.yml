@@ -17,7 +17,7 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: github.com/boxboxjason/security-hub
+      local-prefixes: github.com/genesary/kontrol
     gofmt:
       simplify: true
 
@@ -40,7 +40,7 @@ linters:
       sections:
         - standard
         - default
-        - prefix(github.com/boxboxjason/security-hub)
+        - prefix(github.com/genesary/kontrol)
       skip-generated: true
     wsl_v5:
       allow-first-in-block: true

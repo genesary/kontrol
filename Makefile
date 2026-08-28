@@ -1,7 +1,7 @@
 # Define the Go binary and output directory
 GO ?= go
 OUTPUT_DIR ?= ./bin
-PROJECT_NAME ?= security-hub
+PROJECT_NAME ?= kontrol
 MAIN_FILE ?= .
 DOCKERFILE ?= Containerfile
 DOCKER_ENGINE ?= podman
