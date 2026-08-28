@@ -128,6 +128,7 @@ scorecard:
   maxConcurrency: 5 # empty/0/negative = no concurrency limit
 output:
   path: ./report
+  formats: [] # empty = ["html"]; any combination of html, json, metrics
 ```
 
 `gitlab.filters` restricts discovery to projects whose full path (e.g. `team/backend/service`) matches at least one of the given regular expressions; patterns are OR'd together, so a project is kept as soon as one matches. Leaving it empty (the default) scans every project the token can see. There is no env var override for it, since it's a list rather than a single value.
@@ -151,6 +152,16 @@ There is no env var override for it, since it's a map rather than a single value
 | `KONTROL_OFFLINE` | `true` to disable Scorecard checks that require internet access |
 | `KONTROL_EXPERIMENTAL` | `true` to also run Scorecard's SBOM check |
 
+`output.formats` selects which artifacts are written into `output.path`. All three are optional and independent:
+
+| Format | File(s) | What it is |
+| --- | --- | --- |
+| `html` | `index.html` + `static/` | The browsable drill-down report |
+| `json` | `results.json` | The full tree, machine-readable |
+| `metrics` | `metrics` | Prometheus text exposition, ready to scrape |
+
+Leaving `formats` empty (the default) writes the HTML report alone, matching kontrol's behaviour before the other formats existed. Names are case-insensitive and de-duplicated; an unknown name fails at config load rather than silently producing fewer files than expected. See [Output formats](#output-formats) for what `results.json` and `metrics` contain.
+
 `scorecard.maxConcurrency` bounds how many projects are scanned by Scorecard at once, so a large instance doesn't overwhelm the GitLab API or the local machine. Leave it unset (or set it to `0` or a negative number) to scan every project's concurrently with no limit.
 
 ## Usage
@@ -159,7 +170,7 @@ There is no env var override for it, since it's a map rather than a single value
 kontrol scan --config config.yaml
 ```
 
-This discovers, scans and renders in one pass, writing a self-contained report directory (`index.html` plus its `static/` assets) to `output.path`. From the report, **Export CSV** downloads the full tree (every group/subgroup/project, per-check scores) as a spreadsheet-ready CSV, and **Export PDF** opens the browser's print dialog on a paginated dossier of the whole instance: cover page, executive summary, posture per check, group rollup, a per-project check matrix and any projects that could not be analyzed. The printed document always covers the entire instance, whichever group or project the reader has drilled into on screen.
+This discovers, scans and renders in one pass, writing every artifact selected by `output.formats` (by default just the self-contained report directory: `index.html` plus its `static/` assets) to `output.path`. From the report, **Export CSV** downloads the full tree (every group/subgroup/project, per-check scores) as a spreadsheet-ready CSV, and **Export PDF** opens the browser's print dialog on a paginated dossier of the whole instance: cover page, executive summary, posture per check, group rollup, a per-project check matrix and any projects that could not be analyzed. The printed document always covers the entire instance, whichever group or project the reader has drilled into on screen.
 
 The report's styling is built with [Tailwind CSS](https://tailwindcss.com/) from `internal/report/tailwind/input.css`. The compiled `internal/report/static/css/app.css` is committed, so a plain `go build` never needs Tailwind; only run `make frontend` if you edit the report's styles (it downloads the standalone Tailwind CLI into `./bin` on first use, no Node/npm required).
 
@@ -168,6 +179,80 @@ Logging is structured (via [zap](https://github.com/uber-go/zap)) and written to
 ```bash
 kontrol -v scan --config config.yaml
 ```
+
+## Output formats
+
+Which of these are written is controlled by [`output.formats`](#configuration). They are rendered independently from the same in-memory tree, so enabling one never changes another.
+
+### `results.json`
+
+The full aggregated tree, wrapped in enough run metadata to stay self-describing once moved away from the run that produced it. Every level carries the same fields the HTML report shows: `score` (the project-count-weighted average and the number of projects behind it), the per-check `checks` map, `projectCount`, and `scanError` on any project that could not be analyzed. A check that ran but stayed inconclusive is `null` rather than `0`, matching the report's `N/A`.
+
+```json
+{
+  "root": {
+    "score": { "average": 6.42, "count": 118 },
+    "checks": { "License": { "average": 9.1, "count": 118 }, "Fuzzing": null },
+    "kind": "group",
+    "name": "GitLab instance",
+    "fullPath": "",
+    "webUrl": "",
+    "children": [ "..." ],
+    "projectCount": 120
+  },
+  "generatedAt": "2026-08-28T15:20:00Z",
+  "gitlabUrl": "https://gitlab.example.com",
+  "schemaVersion": 1
+}
+```
+
+Note that `score.count` is the number of projects that actually produced a score, which is lower than `projectCount` whenever some projects failed to scan.
+
+`schemaVersion` is bumped whenever the layout changes meaning, so a consumer can detect an incompatible kontrol version instead of silently misreading it.
+
+### `metrics`
+
+Prometheus text exposition format, in a deliberately extensionless file: it is meant to be served as the body of a `/metrics` endpoint, or dropped into a [textfile collector](https://github.com/prometheus/node_exporter#textfile-collector) directory, rather than opened as a document.
+
+```
+# HELP kontrol_score Overall OpenSSF Scorecard score (0-10), aggregated project-count-weighted at group and instance level.
+# TYPE kontrol_score gauge
+kontrol_score{kind="instance",path=""} 6.42
+kontrol_score{kind="group",path="team"} 5.9
+kontrol_score{kind="project",path="team/backend/service"} 7.1
+
+# HELP kontrol_check_score Per-check score (0-10), aggregated project-count-weighted at group and instance level.
+# TYPE kontrol_check_score gauge
+kontrol_check_score{kind="project",path="team/backend/service",check="License"} 10
+```
+
+| Metric | Labels | Meaning |
+| --- | --- | --- |
+| `kontrol_info` | `gitlab_url` | Always `1`; carries the scanned instance's URL |
+| `kontrol_report_generated_at_seconds` | — | Unix timestamp of the scan, for staleness alerting |
+| `kontrol_score` | `kind`, `path` | Overall score, 0-10 |
+| `kontrol_check_score` | `kind`, `path`, `check` | Per-check score, 0-10 |
+| `kontrol_projects` | `kind`, `path` | Projects contributing to this node's scores |
+| `kontrol_scan_failed` | `kind`, `path` | `1` when the project could not be analyzed |
+
+Every level of the tree is exposed, distinguished by `kind`: `instance` for the synthetic root (which has an empty `path`), `group` for each group and subgroup, `project` for each leaf. The rollups are kontrol's own project-count-weighted averages, so `kontrol_score{kind="group"}` matches the report exactly, unlike an `avg by (...)` computed in PromQL, which would weight every project equally regardless of how the tree is shaped.
+
+Inconclusive scores are **omitted** rather than exported as zero: a check that could not run (offline mode, an unsupported repository) is genuinely absent, and a `0` would be indistinguishable from a real score of 0. Use `absent()` or `kontrol_scan_failed` to alert on those instead. Sample order is stable across runs over unchanged data.
+
+Since the file is static, point a scraper at whatever serves `output.path`. With [Grafana Alloy](https://grafana.com/docs/alloy/latest/):
+
+```alloy
+prometheus.scrape "kontrol" {
+  targets    = [{ __address__ = "kontrol-report.internal:8080", __metrics_path__ = "/metrics" }]
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  // The file only changes when a scan runs, so there is nothing to gain
+  // from scraping it at the default 60s interval.
+  scrape_interval = "5m"
+}
+```
+
+Or, if Alloy runs on the same host as the scan, skip the HTTP hop entirely and have kontrol write into the node_exporter textfile collector's directory (`output.path`) instead.
 
 ## Development
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,37 @@ import (
 )
 
 const defaultOutputPath = "./report"
+
+// The output formats accepted in output.formats, each naming one artifact
+// the report step writes into output.path.
+const (
+	// FormatHTML writes the browsable index.html report and its static/ assets.
+	FormatHTML = "html"
+	// FormatJSON writes the full tree as machine-readable results.json.
+	FormatJSON = "json"
+	// FormatMetrics writes the scores as a Prometheus text exposition
+	// "metrics" file, ready to be served to a scraper.
+	FormatMetrics = "metrics"
+)
+
+// defaultOutputFormats is what an absent (or empty) output.formats means:
+// the HTML report alone, matching kontrol's behaviour before the other
+// formats existed.
+func defaultOutputFormats() []string {
+	return []string{FormatHTML}
+}
+
+// isKnownOutputFormat reports whether name is one of the formats
+// output.formats accepts, so a typo fails at config load rather than
+// silently producing fewer files than expected.
+func isKnownOutputFormat(name string) bool {
+	switch name {
+	case FormatHTML, FormatJSON, FormatMetrics:
+		return true
+	default:
+		return false
+	}
+}
 
 // outputDirPermission matches internal/report's own directory permission, so
 // the writability probe below creates the directory with the same mode the
@@ -49,9 +81,20 @@ type Scorecard struct {
 	Experimental bool `yaml:"experimental"`
 }
 
-// Output holds the settings controlling where the HTML report is written.
+// Output holds the settings controlling where, and in which formats, the
+// report is written.
 type Output struct {
 	Path string `yaml:"path"`
+	// Formats selects which artifacts are written into Path: any
+	// combination of "html" (index.html plus its static/ assets), "json"
+	// (results.json) and "metrics" (a Prometheus text exposition file
+	// named "metrics"). Empty (the default) means "html" alone.
+	Formats []string `yaml:"formats"`
+}
+
+// HasFormat reports whether the named output format is enabled.
+func (output Output) HasFormat(format string) bool {
+	return slices.Contains(output.Formats, format)
 }
 
 // Config is the root configuration for kontrol.
@@ -153,12 +196,53 @@ func (cfg *Config) validate() error {
 		cfg.Output.Path = defaultOutputPath
 	}
 
-	err := checkOutputWritable(cfg.Output.Path)
+	formats, err := normalizeOutputFormats(cfg.Output.Formats)
+	if err != nil {
+		return err
+	}
+
+	cfg.Output.Formats = formats
+
+	err = checkOutputWritable(cfg.Output.Path)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// normalizeOutputFormats lowercases, trims and de-duplicates the configured
+// output formats, rejecting any name that isn't one of the three known
+// ones. An empty list falls back to defaultOutputFormats.
+func normalizeOutputFormats(formats []string) ([]string, error) {
+	normalized := make([]string, 0, len(formats))
+	seen := make(map[string]struct{}, len(formats))
+
+	for _, format := range formats {
+		name := strings.ToLower(strings.TrimSpace(format))
+		if name == "" {
+			continue
+		}
+
+		if !isKnownOutputFormat(name) {
+			return nil, fmt.Errorf("output.formats: unknown format %q (want %s, %s or %s)",
+				format, FormatHTML, FormatJSON, FormatMetrics)
+		}
+
+		if _, duplicate := seen[name]; duplicate {
+			continue
+		}
+
+		seen[name] = struct{}{}
+
+		normalized = append(normalized, name)
+	}
+
+	if len(normalized) == 0 {
+		return defaultOutputFormats(), nil
+	}
+
+	return normalized, nil
 }
 
 // checkOutputWritable confirms outputDir can be created and written to,
