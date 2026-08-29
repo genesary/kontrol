@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -211,5 +212,79 @@ func TestScanProjectsRecordsScanErrorsWithoutFailingTheGroup(t *testing.T) {
 		if project.ScanError == "" {
 			t.Fatalf("project %q ScanError = \"\", want non-empty when the gitlab host is unreachable", project.FullPath)
 		}
+	}
+}
+
+// TestRenderOutputsWritesOnlySelectedFormats asserts output.formats gates
+// each artifact independently, so enabling one never drags in another.
+func TestRenderOutputsWritesOnlySelectedFormats(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		formats []string
+		want    map[string]bool
+	}{
+		{
+			name:    "html only",
+			formats: []string{config.FormatHTML},
+			want:    map[string]bool{"index.html": true, "results.json": false, "metrics": false},
+		},
+		{
+			name:    "json only",
+			formats: []string{config.FormatJSON},
+			want:    map[string]bool{"index.html": false, "results.json": true, "metrics": false},
+		},
+		{
+			name:    "metrics only",
+			formats: []string{config.FormatMetrics},
+			want:    map[string]bool{"index.html": false, "results.json": false, "metrics": true},
+		},
+		{
+			name:    "all three",
+			formats: []string{config.FormatHTML, config.FormatJSON, config.FormatMetrics},
+			want:    map[string]bool{"index.html": true, "results.json": true, "metrics": true},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			outputDir := t.TempDir()
+
+			root := &gitlabtree.Node{
+				Kind: gitlabtree.KindGroup,
+				Name: "GitLab instance",
+				Children: []*gitlabtree.Node{
+					{
+						Kind:     gitlabtree.KindProject,
+						Name:     "demo",
+						FullPath: "team/demo",
+						Score:    &gitlabtree.ScoreStat{Average: 7.5, Count: 1},
+					},
+				},
+			}
+			gitlabtree.Aggregate(root)
+
+			cfg := &config.Config{
+				Output: config.Output{Path: outputDir, Formats: test.formats},
+				Gitlab: config.Gitlab{URL: "https://gitlab.example.com"},
+			}
+
+			err := renderOutputs(root, cfg, time.Now())
+			if err != nil {
+				t.Fatalf("renderOutputs() error = %v", err)
+			}
+
+			for fileName, wantPresent := range test.want {
+				_, err := os.Stat(filepath.Join(outputDir, fileName))
+
+				gotPresent := err == nil
+				if gotPresent != wantPresent {
+					t.Errorf("%s present = %t, want %t", fileName, gotPresent, wantPresent)
+				}
+			}
+		})
 	}
 }

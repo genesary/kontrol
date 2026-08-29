@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -295,4 +296,100 @@ func TestApplyEnvOverrides(t *testing.T) {
 			t.Fatal("Scorecard.Experimental was overwritten by an invalid env value, want unchanged")
 		}
 	})
+}
+
+// writeConfigFileWithFormats writes a minimal valid config carrying the
+// given raw YAML block under output.formats, returning the file's path.
+func writeConfigFileWithFormats(t *testing.T, formats string) string {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+
+	contents := "gitlab:\n  url: https://gitlab.example.com\noutput:\n  path: " +
+		filepath.Join(t.TempDir(), "out") + "\n  formats:\n" + formats
+
+	err := os.WriteFile(configPath, []byte(contents), 0o600)
+	if err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	return configPath
+}
+
+// TestLoadDefaultsOutputFormatsToHTML asserts that a config with no
+// output.formats keeps producing exactly what kontrol produced before the
+// other formats existed.
+func TestLoadDefaultsOutputFormatsToHTML(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load(writeConfigFile(t, filepath.Join(t.TempDir(), "out")))
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+
+	if len(cfg.Output.Formats) != 1 || cfg.Output.Formats[0] != FormatHTML {
+		t.Fatalf("Output.Formats = %v, want [%s]", cfg.Output.Formats, FormatHTML)
+	}
+}
+
+// TestLoadNormalizesOutputFormats asserts casing, surrounding whitespace and
+// repeated entries are all tolerated, and that the result keeps the order
+// the operator wrote.
+func TestLoadNormalizesOutputFormats(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load(writeConfigFileWithFormats(t, "    - Metrics\n    - \" json \"\n    - metrics\n"))
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+
+	want := []string{FormatMetrics, FormatJSON}
+	if len(cfg.Output.Formats) != len(want) {
+		t.Fatalf("Output.Formats = %v, want %v", cfg.Output.Formats, want)
+	}
+
+	for index, format := range want {
+		if cfg.Output.Formats[index] != format {
+			t.Fatalf("Output.Formats = %v, want %v", cfg.Output.Formats, want)
+		}
+	}
+
+	if cfg.Output.HasFormat(FormatHTML) {
+		t.Error("Output.HasFormat(html) = true, want false when html was not listed")
+	}
+
+	if !cfg.Output.HasFormat(FormatMetrics) {
+		t.Error("Output.HasFormat(metrics) = false, want true")
+	}
+}
+
+// TestLoadFailsOnUnknownOutputFormat asserts a typo in output.formats fails
+// at config load rather than silently producing fewer files than expected.
+func TestLoadFailsOnUnknownOutputFormat(t *testing.T) {
+	t.Parallel()
+
+	_, err := Load(writeConfigFileWithFormats(t, "    - html\n    - csv\n"))
+	if err == nil {
+		t.Fatal("Load() error = nil, want non-nil for an unknown output format")
+	}
+
+	if !strings.Contains(err.Error(), "csv") {
+		t.Errorf("Load() error = %v, want it to name the offending format", err)
+	}
+}
+
+// TestLoadFallsBackToDefaultOnEmptyOutputFormats asserts an explicitly empty
+// list is treated as "unset" rather than "write nothing at all", so a run
+// can never silently discard its own results.
+func TestLoadFallsBackToDefaultOnEmptyOutputFormats(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load(writeConfigFileWithFormats(t, "    - \"\"\n"))
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+
+	if len(cfg.Output.Formats) != 1 || cfg.Output.Formats[0] != FormatHTML {
+		t.Fatalf("Output.Formats = %v, want [%s]", cfg.Output.Formats, FormatHTML)
+	}
 }

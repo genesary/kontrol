@@ -74,12 +74,42 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	gitlabtree.Aggregate(root)
 	zap.L().Info("Aggregation complete", zap.Float64("overallScore", overallScore(root)))
 
-	err = report.Render(root, cfg.Output.Path, time.Now(), cfg.Gitlab.URL)
+	err = renderOutputs(root, cfg, time.Now())
 	if err != nil {
-		return fmt.Errorf("rendering report: %w", err)
+		return err
 	}
 
-	zap.L().Info("Report written", zap.String("path", cfg.Output.Path))
+	return nil
+}
+
+// renderOutputs writes every artifact selected by output.formats into
+// output.path. The formats are independent, so each is rendered from the
+// same in-memory tree rather than one being derived from another's file.
+func renderOutputs(root *gitlabtree.Node, cfg *config.Config, generatedAt time.Time) error {
+	if cfg.Output.HasFormat(config.FormatHTML) {
+		err := report.Render(root, cfg.Output.Path, generatedAt, cfg.Gitlab.URL)
+		if err != nil {
+			return fmt.Errorf("rendering report: %w", err)
+		}
+	}
+
+	if cfg.Output.HasFormat(config.FormatJSON) {
+		err := report.RenderJSON(root, cfg.Output.Path, generatedAt, cfg.Gitlab.URL)
+		if err != nil {
+			return fmt.Errorf("rendering JSON results: %w", err)
+		}
+	}
+
+	if cfg.Output.HasFormat(config.FormatMetrics) {
+		err := report.RenderMetrics(root, cfg.Output.Path, generatedAt, cfg.Gitlab.URL)
+		if err != nil {
+			return fmt.Errorf("rendering metrics: %w", err)
+		}
+	}
+
+	zap.L().Info("Report written",
+		zap.String("path", cfg.Output.Path),
+		zap.Strings("formats", cfg.Output.Formats))
 
 	return nil
 }
