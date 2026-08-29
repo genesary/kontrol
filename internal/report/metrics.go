@@ -2,8 +2,6 @@ package report
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,16 +53,9 @@ func newLabelEscaper() *strings.Replacer {
 func RenderMetrics(root *gitlabtree.Node, outputDir string, generatedAt time.Time, gitlabURL string) error {
 	zap.L().Debug("Rendering metrics", zap.String("outputDir", outputDir))
 
-	err := os.MkdirAll(outputDir, outputDirPermission)
+	err := writeArtifact(outputDir, metricsFileName, []byte(buildMetrics(root, generatedAt, gitlabURL)))
 	if err != nil {
-		return fmt.Errorf("creating output directory %q: %w", outputDir, err)
-	}
-
-	outputPath := filepath.Join(outputDir, metricsFileName)
-
-	err = os.WriteFile(outputPath, []byte(buildMetrics(root, generatedAt, gitlabURL)), outputFilePermission)
-	if err != nil {
-		return fmt.Errorf("writing metrics file %q: %w", outputPath, err)
+		return fmt.Errorf("writing metrics file: %w", err)
 	}
 
 	return nil

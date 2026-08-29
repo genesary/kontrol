@@ -120,6 +120,26 @@ func Render(root *gitlabtree.Node, outputDir string, generatedAt time.Time, gitl
 	return nil
 }
 
+// writeArtifact drops a single generated file (data) into outputDir under
+// fileName, creating outputDir first with the same permissions Render uses.
+// It is shared by the non-HTML renderers (RenderJSON, RenderMetrics), which
+// all write exactly one file into the report directory.
+func writeArtifact(outputDir, fileName string, data []byte) error {
+	err := os.MkdirAll(outputDir, outputDirPermission)
+	if err != nil {
+		return fmt.Errorf("creating output directory %q: %w", outputDir, err)
+	}
+
+	outputPath := filepath.Join(outputDir, fileName)
+
+	err = os.WriteFile(outputPath, data, outputFilePermission)
+	if err != nil {
+		return fmt.Errorf("writing %q: %w", outputPath, err)
+	}
+
+	return nil
+}
+
 // copyStaticAssets copies the embedded static/ tree (compiled CSS and
 // hand-written JS) into outputDir, preserving its static/css/... and
 // static/js/... layout so the paths referenced by the report template

@@ -3,8 +3,6 @@ package report
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"go.uber.org/zap"
@@ -53,16 +51,9 @@ func RenderJSON(root *gitlabtree.Node, outputDir string, generatedAt time.Time, 
 
 	encoded = append(encoded, '\n')
 
-	err = os.MkdirAll(outputDir, outputDirPermission)
+	err = writeArtifact(outputDir, jsonFileName, encoded)
 	if err != nil {
-		return fmt.Errorf("creating output directory %q: %w", outputDir, err)
-	}
-
-	outputPath := filepath.Join(outputDir, jsonFileName)
-
-	err = os.WriteFile(outputPath, encoded, outputFilePermission)
-	if err != nil {
-		return fmt.Errorf("writing JSON results %q: %w", outputPath, err)
+		return fmt.Errorf("writing JSON results: %w", err)
 	}
 
 	return nil
