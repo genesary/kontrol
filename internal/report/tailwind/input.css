@@ -695,6 +695,10 @@
     opacity: 0.9;
   }
 
+  .row-clickable {
+    cursor: pointer;
+  }
+
   .row-clickable:hover {
     background: var(--color-accent-wash);
   }
