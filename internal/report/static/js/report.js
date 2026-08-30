@@ -231,9 +231,7 @@
         text: label,
       });
       link.addEventListener("click", function () {
-        path = path.slice(0, index + 1);
-        filter = "";
-        render();
+        go(path.slice(0, index + 1));
       });
       nav.appendChild(link);
     });
@@ -628,9 +626,7 @@
         scoreValue(entry.node.score),
       ]);
       row.addEventListener("click", function () {
-        path = path.slice(0, path.length - 1).concat(entry.chain);
-        filter = "";
-        render();
+        go(path.slice(0, path.length - 1).concat(entry.chain));
       });
       list.appendChild(row);
     });
@@ -777,9 +773,7 @@
       );
 
       function open() {
-        path = path.concat([child]);
-        filter = "";
-        render();
+        go(path.concat([child]));
       }
 
       row.addEventListener("click", open);
@@ -829,6 +823,75 @@
     );
   }
 
+  // ---- URL-bar navigation --------------------------------------------------
+  //
+  // The current position in the tree is mirrored into location.hash as the
+  // node's GitLab full path (e.g. "#/team/backend/service"). Assigning the
+  // hash pushes a history entry, so the browser Back button walks back up the
+  // tree, and the URL can be copied, pasted or reloaded to reopen the same
+  // view. A single hashchange listener is the only place navigation is
+  // applied; every in-page control routes through go().
+
+  function hashForPath(chain) {
+    var fullPath = chain[chain.length - 1].fullPath || "";
+    if (!fullPath) return "#/";
+
+    return "#/" + fullPath.split("/").map(encodeURIComponent).join("/");
+  }
+
+  // pathFromHash resolves the current hash to a root-to-node chain, walking
+  // the tree one path segment at a time. An unknown or stale segment stops
+  // the walk at the deepest node that still resolves (root if none does), so
+  // a hand-edited or outdated URL degrades to the nearest valid view.
+  function pathFromHash() {
+    var chain = [root];
+    var raw = (location.hash || "").replace(/^#\/?/, "");
+    if (!raw) return chain;
+
+    var segments = raw.split("/").map(function (segment) {
+      try {
+        return decodeURIComponent(segment);
+      } catch (err) {
+        return segment;
+      }
+    });
+
+    var node = root;
+    var prefix = "";
+    for (var i = 0; i < segments.length; i++) {
+      prefix = prefix ? prefix + "/" + segments[i] : segments[i];
+      var match = (node.children || []).filter(function (child) {
+        return child.fullPath === prefix;
+      })[0];
+      if (!match) break;
+      chain.push(match);
+      node = match;
+    }
+
+    return chain;
+  }
+
+  // go navigates to the given root-to-node chain by updating the hash, which
+  // fires hashchange and routes through applyHash. When the hash would not
+  // change it renders directly so the view still refreshes.
+  function go(chain) {
+    var next = hashForPath(chain);
+    if (next === (location.hash || "#/")) {
+      path = chain;
+      filter = "";
+      render();
+
+      return;
+    }
+    location.hash = next;
+  }
+
+  function applyHash() {
+    path = pathFromHash();
+    filter = "";
+    render();
+  }
+
   function render() {
     var current = path[path.length - 1];
     renderBreadcrumb();
@@ -836,6 +899,8 @@
     renderScanError(current);
     renderChildren(current);
   }
+
+  window.addEventListener("hashchange", applyHash);
 
   window.KontrolReport = {
     getRoot: function () {
@@ -861,5 +926,16 @@
     bandCounts: bandCounts,
   };
 
-  render();
+  // Resolve the opening view from the URL so a copied or reloaded link lands
+  // where it was left; normalize a bare root URL to "#/" (without adding a
+  // history entry) so the root step has a copyable hash too.
+  if (!location.hash) {
+    try {
+      history.replaceState(null, "", "#/");
+    } catch (err) {
+      // Some browsers block replaceState on file:// URLs; the empty hash
+      // still resolves to the root view.
+    }
+  }
+  applyHash();
 })();
